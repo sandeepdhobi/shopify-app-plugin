@@ -1,0 +1,28 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
+name = "fruitful-benchmark-app"
+handle = "fruitful-benchmark-app-13"
+application_url = "https://associations-pray-failures-searched.trycloudflare.com"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-04"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = [
+  "https://associations-pray-failures-searched.trycloudflare.com/auth/callback",
+  "https://associations-pray-failures-searched.trycloudflare.com/auth/shopify/callback",
+  "https://associations-pray-failures-searched.trycloudflare.com/api/auth/callback"
+]
+
+[pos]
+embedded = false
