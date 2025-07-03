@@ -69,11 +69,334 @@ app.post("/api/products", async (_req, res) => {
   res.status(status).send({ success: status === 200, error });
 });
 
+app.get("/api/products/list", async (_req, res) => {
+  const client = new shopify.api.clients.Graphql({
+    session: res.locals.shopify.session,
+  });
+
+  try {
+    const productsData = await client.request(`
+      query getProducts($first: Int!) {
+        products(first: $first) {
+          edges {
+            node {
+              id
+              title
+              handle
+              status
+              totalInventory
+              createdAt
+              variants(first: 1) {
+                edges {
+                  node {
+                    id
+                    price
+                    sku
+                    inventoryQuantity
+                  }
+                }
+              }
+              featuredImage {
+                originalSrc
+                altText
+              }
+            }
+          }
+        }
+      }
+    `, {
+      variables: {
+        first: 50
+      }
+    });
+
+    const products = productsData.data.products.edges.map(edge => ({
+      id: edge.node.id,
+      title: edge.node.title,
+      handle: edge.node.handle,
+      status: edge.node.status.toLowerCase(),
+      totalInventory: edge.node.totalInventory,
+      createdAt: edge.node.createdAt,
+      variants: edge.node.variants.edges.map(variantEdge => ({
+        id: variantEdge.node.id,
+        price: variantEdge.node.price,
+        sku: variantEdge.node.sku,
+        inventory_quantity: variantEdge.node.inventoryQuantity
+      })),
+      image: edge.node.featuredImage
+    }));
+
+    res.status(200).send({ products });
+  } catch (e) {
+    console.log(`Failed to fetch products: ${e.message}`);
+    res.status(500).send({ error: e.message });
+  }
+});
+
+app.get("/api/orders/list", async (_req, res) => {
+  const client = new shopify.api.clients.Graphql({
+    session: res.locals.shopify.session,
+  });
+
+  try {
+    const ordersData = await client.request(`
+      query getOrders($first: Int!) {
+        orders(first: $first) {
+          edges {
+            node {
+              id
+              name
+              orderNumber
+              email
+              createdAt
+              updatedAt
+              totalPrice
+              currency
+              financialStatus
+              fulfillmentStatus
+              customer {
+                id
+                firstName
+                lastName
+                email
+              }
+              lineItems(first: 10) {
+                edges {
+                  node {
+                    id
+                    title
+                    quantity
+                    variant {
+                      id
+                      title
+                      price
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, {
+      variables: {
+        first: 100
+      }
+    });
+
+    const orders = ordersData.data.orders.edges.map(edge => ({
+      id: edge.node.id,
+      order_number: edge.node.orderNumber,
+      name: edge.node.name,
+      email: edge.node.email,
+      created_at: edge.node.createdAt,
+      updated_at: edge.node.updatedAt,
+      total_price: edge.node.totalPrice,
+      currency: edge.node.currency,
+      financial_status: edge.node.financialStatus?.toLowerCase(),
+      fulfillment_status: edge.node.fulfillmentStatus?.toLowerCase(),
+      customer: edge.node.customer ? {
+        id: edge.node.customer.id,
+        first_name: edge.node.customer.firstName,
+        last_name: edge.node.customer.lastName,
+        email: edge.node.customer.email
+      } : null,
+      line_items: edge.node.lineItems.edges.map(itemEdge => ({
+        id: itemEdge.node.id,
+        title: itemEdge.node.title,
+        quantity: itemEdge.node.quantity,
+        variant: itemEdge.node.variant
+      }))
+    }));
+
+    res.status(200).send({ orders });
+  } catch (e) {
+    console.log(`Failed to fetch orders: ${e.message}`);
+    res.status(500).send({ error: e.message });
+  }
+});
+
+// Subscription Plans API Routes
+app.get("/api/plans", async (_req, res) => {
+  try {
+    const plans = [
+      {
+        id: 'free',
+        name: 'Starter',
+        price: 0,
+        interval: 'month',
+        badge: 'BASIC',
+        badgeStatus: 'attention',
+        description: 'Perfect for testing our services',
+        features: [
+          'Up to 10000 products sourced monthly',
+          'Basic product research & validation',
+          'Standard shipping (5-7 business days)',
+          'Email support',
+          'Basic inventory management',
+          'Order tracking dashboard',
+          'Standard packaging',
+          'US domestic shipping only',
+          'Basic analytics & reporting'
+        ],
+        buttonText: 'Current plan',
+        buttonVariant: 'plain'
+      },
+      {
+        id: 'pro',
+        name: 'Professional',
+        price: 49,
+        interval: 'month',
+        badge: 'PRO',
+        badgeStatus: 'success',
+        description: '14-day free trial',
+        features: [
+          'Up to 100 million products sourced monthly',
+          'Advanced product research & market analysis',
+          'Priority shipping (2-3 business days)',
+          'Priority email & chat support',
+          'Automated inventory management',
+          'Advanced order tracking & notifications',
+          'Custom branded packaging available',
+          'US & Canada shipping',
+          'Detailed analytics & profit tracking',
+          'Quality control inspections',
+          'Returns & refunds handling',
+          'Supplier relationship management'
+        ],
+        isRecommended: true,
+        buttonText: 'Select plan',
+        buttonVariant: 'primary'
+      }
+    ];
+    
+    res.status(200).send({ plans });
+  } catch (e) {
+    console.log(`Failed to fetch plans: ${e.message}`);
+    res.status(500).send({ error: e.message });
+  }
+});
+
+// Get current subscription status
+app.get("/api/subscription/status", async (_req, res) => {
+  try {
+    const session = res.locals.shopify.session;
+    // In a real app, you'd check the subscription status from your database
+    // For demo purposes, returning a mock response
+    const subscriptionStatus = {
+      active: false,
+      plan: null,
+      trial_ends_at: null,
+      current_period_end: null
+    };
+    
+    res.status(200).send({ subscription: subscriptionStatus });
+  } catch (e) {
+    console.log(`Failed to fetch subscription status: ${e.message}`);
+    res.status(500).send({ error: e.message });
+  }
+});
+
+// Create subscription
+app.post("/api/subscription/create", async (req, res) => {
+  try {
+    const { planId } = req.body;
+    const session = res.locals.shopify.session;
+    
+    if (!planId) {
+      res.status(400).send({ error: "Plan ID is required" });
+      return;
+    }
+
+    // In a real app, you would:
+    // 1. Validate the plan ID
+    // 2. Create a Shopify App Subscription or integrate with payment provider
+    // 3. Store subscription data in your database
+    // 4. Handle webhooks for subscription updates
+    
+    // For demo purposes, using Shopify's App Subscription API
+    const client = new shopify.api.clients.Graphql({
+      session: session,
+    });
+
+    // Find the plan details
+    const plans = [
+      { id: "free", name: "Free", price: 0 },
+      { id: "pro", name: "Pro", price: 6 },
+      { id: "plus", name: "Plus", price: 20 }
+    ];
+    
+    const selectedPlan = plans.find(p => p.id === planId);
+    if (!selectedPlan) {
+      res.status(400).send({ error: "Invalid plan ID" });
+      return;
+    }
+
+    // Handle free plan
+    if (selectedPlan.id === "free") {
+      res.status(200).send({ 
+        success: true, 
+        message: "Free plan is already active",
+        confirmationUrl: `${process.env.SHOPIFY_APP_URL}/plans?subscription=free`
+      });
+      return;
+    }
+
+    // Create App Subscription
+    const subscriptionData = await client.request(`
+      mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $lineItems: [AppSubscriptionLineItemInput!]!) {
+        appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems) {
+          appSubscription {
+            id
+            name
+            status
+          }
+          confirmationUrl
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `, {
+      variables: {
+        name: `${selectedPlan.name} Plan`,
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/plans?subscription=success`,
+        lineItems: [{
+          plan: {
+            appRecurringPricingDetails: {
+              price: { amount: selectedPlan.price, currencyCode: "USD" },
+              interval: "EVERY_30_DAYS"
+            }
+          }
+        }]
+      }
+    });
+
+    if (subscriptionData.data.appSubscriptionCreate.userErrors.length > 0) {
+      res.status(400).send({ 
+        error: subscriptionData.data.appSubscriptionCreate.userErrors[0].message 
+      });
+      return;
+    }
+
+    res.status(200).send({
+      success: true,
+      confirmationUrl: subscriptionData.data.appSubscriptionCreate.confirmationUrl,
+      subscription: subscriptionData.data.appSubscriptionCreate.appSubscription
+    });
+    
+  } catch (e) {
+    console.log(`Failed to create subscription: ${e.message}`);
+    res.status(500).send({ error: e.message });
+  }
+});
+
 app.use(shopify.cspHeaders());
 app.use(serveStatic(STATIC_PATH, { index: false }));
 
 app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
-  return res
+  res
     .status(200)
     .set("Content-Type", "text/html")
     .send(

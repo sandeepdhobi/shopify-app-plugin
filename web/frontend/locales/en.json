@@ -8,6 +8,7 @@
     "yourAppIsReadyToExplore": "Your app is ready to explore! It contains everything you need to get started including the <PolarisLink>Polaris design system</PolarisLink>, <AdminApiLink>Shopify Admin API</AdminApiLink>, and <AppBridgeLink>App Bridge</AppBridgeLink> UI library and components."
   },
   "NavigationMenu": {
+    "dashboard": "Dashboard",
     "pageName": "Page name"
   },
   "NotFound": {
@@ -34,5 +35,26 @@
     },
     "title": "Product Counter",
     "totalProductsHeading": "TOTAL PRODUCTS"
+  },
+  "Dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview",
+    "products": "Products",
+    "orders": "Orders",
+    "orderSummary": "Order Summary",
+    "totalOrders": "TOTAL ORDERS",
+    "totalRevenue": "TOTAL REVENUE",
+    "recentOrders": "Recent Orders",
+    "productsManagement": "Products Management",
+    "ordersManagement": "Orders Management",
+    "refreshOrders": "Refresh Orders",
+    "noOrdersYet": "No orders yet",
+    "ordersWillAppear": "Orders will appear here when customers make purchases.",
+    "noProductsFound": "No products found",
+    "createProductsToStart": "Create some products to get started.",
+    "noOrdersFound": "No orders found",
+    "orderWillAppear": "Orders will appear here when customers make purchases.",
+    "loadingOrders": "Loading orders...",
+    "loadingProducts": "Loading products..."
   }
 }
