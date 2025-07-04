@@ -3,7 +3,7 @@
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
 name = "fruitful-benchmark-app"
 handle = "fruitful-benchmark-app-13"
-application_url = "https://enclosed-du-yeah-israel.trycloudflare.com"
+application_url = "https://rivers-death-staffing-auditor.trycloudflare.com"
 embedded = true
 
 [build]
@@ -19,9 +19,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://enclosed-du-yeah-israel.trycloudflare.com/auth/callback",
-  "https://enclosed-du-yeah-israel.trycloudflare.com/auth/shopify/callback",
-  "https://enclosed-du-yeah-israel.trycloudflare.com/api/auth/callback"
+  "https://rivers-death-staffing-auditor.trycloudflare.com/auth/callback",
+  "https://rivers-death-staffing-auditor.trycloudflare.com/auth/shopify/callback",
+  "https://rivers-death-staffing-auditor.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

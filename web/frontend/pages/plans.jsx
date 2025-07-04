@@ -106,7 +106,7 @@ export default function PlansPage() {
 
   if (loading) {
     return (
-      <Page narrowWidth>
+      <Page>
         <div style={{ textAlign: "center", padding: "60px" }}>
           <Spinner size="large" />
           <Text variant="headingMd" as="h2">

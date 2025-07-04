@@ -18,9 +18,9 @@ export default function App() {
       <BrowserRouter>
         <QueryProvider>
           <NavMenu>
-            <a href="/" rel="home" />
-            <a href="/dashboard">{t("NavigationMenu.dashboard")}</a>
-            <a href="/plans">Plans</a>
+            <a href="/" rel="home">Home</a>
+            {/* <a href="/dashboard">{t("NavigationMenu.dashboard")}</a> */}
+            <a href="/plans">Subscription Plans</a>
           </NavMenu>
           <Routes pages={pages} />
         </QueryProvider>
