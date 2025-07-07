@@ -34,7 +34,7 @@ export default function HomePage() {
   
   return (
     <Page>
-      <TitleBar title="Welcome to Fruitful Benchmark" />
+      <TitleBar title="Welcome to DropShipper" />
       <Layout>
         {/* Hero Section */}
         <Layout.Section>

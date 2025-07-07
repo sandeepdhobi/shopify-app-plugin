@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
-name = "fruitful-benchmark-app"
+name = "DropShipper"
 handle = "fruitful-benchmark-app-13"
 application_url = "https://proven-integrating-words-childhood.trycloudflare.com"
 embedded = true
