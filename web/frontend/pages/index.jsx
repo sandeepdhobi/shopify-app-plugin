@@ -60,9 +60,6 @@ export default function HomePage() {
                     <Button primary size="large" onClick={handleGetStarted}>
                       Get Started - View Plans
                     </Button>
-                    <Button outline size="large" url="/dashboard">
-                      Go to Dashboard
-                    </Button>
                   </Stack>
                 </Stack.Item>
               </Stack>
@@ -74,6 +71,7 @@ export default function HomePage() {
                 {/* Simple Steps Section */}
                 <Layout.Section>
           <Card sectioned>
+            <Box paddingBlockStart="6" paddingBlockEnd="6">
             <Stack vertical spacing="loose">
               <Stack.Item>
                 <div style={{ textAlign: "center" }}>
@@ -110,7 +108,7 @@ export default function HomePage() {
                       justifyContent: 'center',
                       marginBottom: '12px',
                       color: 'white',
-                      fontSize: '20px',
+                      fontSize: '30px',
                       fontWeight: 'bold'
                     }}>
                       1
@@ -153,7 +151,7 @@ export default function HomePage() {
                       justifyContent: 'center',
                       marginBottom: '12px',
                       color: 'white',
-                      fontSize: '20px',
+                      fontSize: '30px',
                       fontWeight: 'bold'
                     }}>
                       2
@@ -196,7 +194,7 @@ export default function HomePage() {
                       justifyContent: 'center',
                       marginBottom: '12px',
                       color: 'white',
-                      fontSize: '20px',
+                      fontSize: '30px',
                       fontWeight: 'bold'
                     }}>
                       3
@@ -213,16 +211,18 @@ export default function HomePage() {
                 </div>
               </Stack.Item>
             </Stack>
+            </Box>
           </Card>
         </Layout.Section>
 
         {/* Combined Features & How It Works Section */}
         <Layout.Section>
           <Card sectioned>
+            <Box paddingBlockStart="6" paddingBlockEnd="6">
             <Stack vertical spacing="extraLoose">
               <Stack.Item>
                 <div style={{ textAlign: "center" }}>
-                  <Text as="h2" variant="headingXl" fontWeight="bold">
+                  <Text as="h2" variant="headingLg" fontWeight="bold" color="subdued">
                     Everything You Need to Succeed
                   </Text>
                   <Box paddingBlockStart="2">
@@ -379,8 +379,8 @@ export default function HomePage() {
                   </div>
                 </div>
               </Stack.Item>
-
             </Stack>
+            </Box>
           </Card>
         </Layout.Section>
 
@@ -407,7 +407,7 @@ export default function HomePage() {
                     <Button primary size="large" onClick={handleGetStarted}>
                       View Subscription Plans
                     </Button>
-                    <Button outline size="large" url="/dashboard">
+                    <Button outline size="large" disabled>
                       Explore Dashboard
                     </Button>
                   </Stack>

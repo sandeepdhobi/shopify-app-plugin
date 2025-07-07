@@ -286,32 +286,11 @@ export default function PlansPage() {
       >
         <Modal.Section>
           <Stack vertical spacing="loose">
-            <Card sectioned>
-              <Stack vertical spacing="tight">
-                <Text variant="headingMd" as="h3">
-                  Plan Summary
-                </Text>
-                <Stack distribution="equalSpacing">
-                  <Text variant="bodySm" as="p">
-                    {selectedPlan?.name} Plan
-                  </Text>
-                  <Text variant="bodySm" as="p">
-                    ${selectedPlan?.price}/{selectedPlan?.interval}
-                  </Text>
-                </Stack>
-              </Stack>
-            </Card>
 
             <FormLayout>
               <Text variant="headingMd" as="h3">
                 Payment Information
               </Text>
-              <Banner tone="info">
-                <p>
-                  This is a demo. In production, you would integrate with a real
-                  payment processor like Stripe or use Shopify's billing API.
-                </p>
-              </Banner>
 
               <TextField
                 label="Card Number"
