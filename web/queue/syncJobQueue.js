@@ -73,7 +73,7 @@ const fetchProductsFromThirdParty = async (page = 1, limit = 100) => {
   
   const mockProducts = [];
   const startId = (page - 1) * limit + 1;
-  const totalProducts = 1000; // Reduced from 1 million to 1000 for testing
+  const totalProducts = 15; // Reduced from 1 million to 1000 for testing
   
   for (let i = 0; i < limit && startId + i - 1 < totalProducts; i++) {
     const id = startId + i - 1;
@@ -118,6 +118,8 @@ const createShopifyProduct = async (session, product) => {
               edges {
                 node {
                   id
+                  sku
+                  price
                 }
               }
             }
@@ -152,48 +154,8 @@ const createShopifyProduct = async (session, product) => {
     }
     
     const createdProduct = result.data.productCreate.product;
-    const defaultVariant = createdProduct.variants.edges[0]?.node;
     
-    if (defaultVariant) {
-      console.log(`[DEBUG] Updating variant for product ${createdProduct.id}`);
-      
-      const variantMutation = `
-        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-            productVariants {
-              id
-              price
-              sku
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-      
-      const variantInput = [{
-        id: defaultVariant.id,
-        price: product.price.toString(),
-        sku: product.sku,
-        weight: product.weight,
-        weightUnit: product.weight_unit.toUpperCase(),
-        inventoryQuantity: product.inventory_quantity
-      }];
-      
-      const variantResult = await client.request(variantMutation, {
-        variables: { 
-          productId: createdProduct.id,
-          variants: variantInput 
-        }
-      });
-      
-      if (variantResult.data.productVariantsBulkUpdate.userErrors.length > 0) {
-        const error = variantResult.data.productVariantsBulkUpdate.userErrors[0];
-        console.warn(`[WARN] Failed to update variant for product ${createdProduct.id}: ${error.message} (field: ${error.field})`);
-      }
-    }
+    console.log(`[SUCCESS] Created product ${createdProduct.id} successfully`);
     
     return createdProduct;
     
