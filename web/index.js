@@ -7,7 +7,7 @@ import serveStatic from "serve-static";
 import shopify from "./shopify.js";
 import productCreator from "./product-creator.js";
 import PrivacyWebhookHandlers from "./privacy.js";
-import { startSyncJob, getSyncJobStatus, getSyncJobsForShop, cancelSyncJob, forceCancelAllJobs } from "./queue/syncJobQueue.js";
+import { startSyncJob, getSyncJobStatus, getSyncJobsForShop, cancelSyncJob, forceCancelAllJobs, getCurrentJobStatus } from "./queue/syncJobQueue.js";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
@@ -239,14 +239,14 @@ app.post("/api/products/sync", async (req, res) => {
 app.get("/api/products/sync/:jobId/status", async (req, res) => {
   try {
     const { jobId } = req.params;
-    const jobStatus = await getSyncJobStatus(jobId);
+    const result = await getSyncJobStatus(jobId);
     
-    if (!jobStatus) {
+    if (!result.job) {
       res.status(404).send({ error: "Job not found" });
       return;
     }
     
-    res.status(200).send({ job: jobStatus });
+    res.status(200).send(result);
   } catch (error) {
     console.error("Failed to get sync job status:", error.message);
     res.status(500).send({ error: error.message });
@@ -256,9 +256,9 @@ app.get("/api/products/sync/:jobId/status", async (req, res) => {
 app.get("/api/products/sync/history", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
-    const jobs = await getSyncJobsForShop(session.shop);
+    const result = await getSyncJobsForShop(session.shop);
     
-    res.status(200).send({ jobs });
+    res.status(200).send(result);
   } catch (error) {
     console.error("Failed to get sync job history:", error.message);
     res.status(500).send({ error: error.message });
@@ -268,10 +268,10 @@ app.get("/api/products/sync/history", async (req, res) => {
 app.delete("/api/products/sync/:jobId", async (req, res) => {
   try {
     const { jobId } = req.params;
-    const cancelled = await cancelSyncJob(jobId);
+    const result = await cancelSyncJob(jobId);
     
-    if (!cancelled) {
-      res.status(404).send({ error: "Job not found or cannot be cancelled" });
+    if (!result.success) {
+      res.status(404).send({ error: result.error || "Job not found or cannot be cancelled" });
       return;
     }
     
@@ -302,6 +302,63 @@ app.delete("/api/products/sync/force/all", async (req, res) => {
   } catch (error) {
     console.error("Failed to force cancel all jobs:", error.message);
     res.status(500).send({ error: error.message });
+  }
+});
+
+// Get current job status (for health checks)
+app.get("/api/products/sync/current", async (req, res) => {
+  try {
+    const currentJob = getCurrentJobStatus();
+    
+    res.status(200).send({ 
+      hasActiveJob: !!currentJob,
+      currentJob: currentJob 
+    });
+  } catch (error) {
+    console.error("Failed to get current job status:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Test endpoint to debug single product creation
+app.post("/api/products/sync/test", async (req, res) => {
+  try {
+    const session = res.locals.shopify.session;
+    
+    // Create a single test product
+    const testProduct = {
+      id: 'test-product-1',
+      title: 'Test Product',
+      description: 'This is a test product for debugging',
+      sku: 'TEST-001',
+      price: '19.99',
+      inventory_quantity: 10,
+      category: 'Electronics',
+      tags: ['test', 'debug'],
+      vendor: 'Test Vendor',
+      weight: 0.5,
+      weight_unit: 'kg'
+    };
+    
+    console.log(`[DEBUG] Testing product creation with session shop: ${session?.shop}`);
+    console.log(`[DEBUG] Session details:`, { shop: session?.shop, accessToken: session?.accessToken ? 'present' : 'missing' });
+    
+    const { createShopifyProduct } = await import('./queue/syncJobQueue.js');
+    const result = await createShopifyProduct(session, testProduct);
+    
+    res.status(200).send({ 
+      success: true,
+      message: "Test product created successfully",
+      product: result
+    });
+  } catch (error) {
+    console.error("Failed to create test product:", error.message);
+    console.error("Full error:", error);
+    res.status(500).send({ 
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
   }
 });
 

@@ -1,15 +1,21 @@
 # Product Sync Setup Guide
 
-This guide will help you set up the product sync feature for your Shopify app.
+This guide will help you set up the improved product sync feature for your Shopify app.
+
+## Key Improvements
+
+- **Simplified Architecture**: Removed Redis dependency, uses SQLite and in-memory job tracking
+- **Single Job Processing**: Only one sync job runs at a time for better resource management
+- **Optimized Performance**: Parallel batch processing with improved rate limiting (5 req/sec)
+- **Enhanced Error Handling**: Better error tracking and consecutive error detection
+- **Improved Cancellation**: Simplified and more reliable job cancellation
+- **Better UI**: Updated frontend to reflect single-job architecture
 
 ## Prerequisites
 
-1. **Redis Server**: The sync feature uses Redis for job queue management.
-   - Install Redis locally: `brew install redis` (macOS) or `sudo apt-get install redis-server` (Ubuntu)
-   - Start Redis: `redis-server`
-   - Alternative: Use a cloud Redis service like Redis Cloud or AWS ElastiCache
+1. **Node.js**: Make sure you have Node.js 16+ installed
 
-2. **Node.js**: Make sure you have Node.js 16+ installed
+2. **SQLite**: The sync feature uses SQLite for job tracking (included with Node.js)
 
 ## Setup Steps
 
@@ -25,10 +31,6 @@ npm install
 Create a `.env` file in the `web/` directory (if it doesn't exist) and add:
 
 ```env
-# Redis Configuration (optional - defaults to localhost:6379)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
 # Shopify App Configuration
 SHOPIFY_API_KEY=your_api_key_here
 SHOPIFY_API_SECRET=your_api_secret_here
@@ -76,13 +78,13 @@ npm run dev
 ## How It Works
 
 ### Background Processing
-1. **Job Queue**: Uses Bull.js with Redis for reliable job queue management
-2. **Batch Processing**: Processes products in configurable batches to manage memory usage
-3. **Rate Limiting**: Respects Shopify API rate limits (2 requests per second)
-4. **Error Handling**: Retries failed operations and tracks errors
+1. **Single Job Processing**: Simplified architecture that processes one job at a time
+2. **Optimized Batch Processing**: Processes products in parallel batches for better performance
+3. **Smart Rate Limiting**: Optimized to 5 requests per second for single job execution
+4. **Enhanced Error Handling**: Improved error tracking with consecutive error detection
 
 ### Third-Party Integration
-- **Mock API**: Currently uses a mock third-party API that simulates 1 million products
+- **Mock API**: Currently uses a mock third-party API that simulates 1000 products for testing
 - **Real Implementation**: Replace the `fetchProductsFromThirdParty` function in `queue/syncJobQueue.js` with your actual API integration
 
 ### Shopify API Compatibility
@@ -116,70 +118,72 @@ CREATE TABLE sync_jobs (
 
 ## Production Considerations
 
-### 1. Redis Configuration
-- Use a dedicated Redis instance for production
-- Configure Redis persistence for job durability
-- Set appropriate memory limits and eviction policies
+### 1. Database Configuration
+- Use a dedicated SQLite database or upgrade to PostgreSQL/MySQL for production
+- Implement proper database backups and recovery
+- Monitor database performance and storage
 
 ### 2. Error Handling
 - Implement proper logging for sync operations
 - Set up alerts for failed sync jobs
-- Monitor Redis and database performance
+- Monitor application performance and memory usage
 
 ### 3. API Rate Limits
 - Adjust batch sizes based on your API limits
-- Implement exponential backoff for failed requests
-- Consider using multiple API keys for higher throughput
+- The system is optimized for single job execution with 5 requests per second
+- Consider implementing dynamic rate limiting based on API response times
 
 ### 4. Scalability
-- Use Redis Cluster for high availability
-- Consider horizontal scaling with multiple worker processes
-- Implement proper database connection pooling
+- For high-volume scenarios, consider upgrading to a distributed job queue system
+- Implement proper application monitoring and health checks
+- Consider using load balancing for multiple app instances
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Redis Connection Error**
-   - Ensure Redis is running: `redis-cli ping`
-   - Check Redis host and port configuration
-
-2. **Database Errors**
+1. **Database Errors**
    - Verify write permissions in the app directory
    - Check SQLite database file permissions
+   - Ensure the database file isn't locked by another process
 
-3. **API Rate Limit Errors**
+2. **API Rate Limit Errors**
    - Reduce batch size in sync configuration
-   - Increase delay between API calls
+   - The system is optimized for 5 requests per second
+   - Check Shopify API limits for your plan
 
-4. **Memory Issues**
+3. **Memory Issues**
    - Monitor Node.js memory usage
    - Adjust batch sizes for large product catalogs
+   - The system now processes products in parallel batches
 
-5. **GraphQL API Errors**
+4. **GraphQL API Errors**
    - Ensure you're using Shopify Admin API version 2024-04 or later
-   - The `ProductInput.variants` field is deprecated - products are created separately from variants
-   - Use `productVariantsBulkUpdate` instead of `productVariantCreate` (which doesn't exist)
+   - Products are created separately from variants for better reliability
+   - Use `productVariantsBulkUpdate` for variant updates
 
-6. **Sync Job Cancel Issues**
-   - If regular cancel fails, use the "Force Cancel All" button in the UI
-   - Force cancel will remove all jobs from the queue and mark them as cancelled in the database
-   - Use `curl -X DELETE http://localhost:3000/api/products/sync/force/all` via API
+5. **Sync Job Issues**
+   - Only one job can run at a time - check current job status
+   - Use "Force Cancel" button if regular cancel fails
+   - Check application logs for detailed error messages with `[DEBUG]`, `[ERROR]`, and `[SUCCESS]` tags
+   - Use `curl -X GET http://localhost:3000/api/products/sync/current` to check active jobs
+   - Test single product creation with `curl -X POST http://localhost:3000/api/products/sync/test`
+   - If jobs fail immediately, check session authentication and Shopify API permissions
 
 ### Debug Commands
 
 ```bash
-# Check Redis status
-redis-cli ping
-
-# View Redis keys
-redis-cli keys "*"
-
 # Check sync job database
 sqlite3 sync_jobs.db "SELECT * FROM sync_jobs ORDER BY created_at DESC LIMIT 10;"
 
+# Check current active job
+curl http://localhost:3000/api/products/sync/current
+
 # Monitor app logs
 npm run dev
+
+# Check database table structure
+sqlite3 sync_jobs.db ".schema sync_jobs"
 ```
 
 ## API Reference
@@ -209,6 +213,17 @@ curl -X DELETE http://localhost:3000/api/products/sync/{jobId}
 ### Force Cancel All Jobs
 ```bash
 curl -X DELETE http://localhost:3000/api/products/sync/force/all
+```
+
+### Get Current Job Status
+```bash
+curl http://localhost:3000/api/products/sync/current
+```
+
+### Test Product Creation (Debug)
+```bash
+curl -X POST http://localhost:3000/api/products/sync/test \
+  -H "Content-Type: application/json"
 ```
 
 ## Next Steps

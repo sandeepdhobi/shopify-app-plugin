@@ -58,7 +58,10 @@ export default function ProductSyncCard() {
         },
         body: JSON.stringify({ batchSize }),
       });
-      if (!response.ok) throw new Error("Failed to start sync");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to start sync");
+      }
       return response.json();
     },
     onSuccess: (data) => {
@@ -252,7 +255,7 @@ export default function ProductSyncCard() {
                     onClick={handleForceCancelAll}
                     loading={forceCancelAllMutation.isLoading}
                   >
-                    Force Cancel All
+                    Force Cancel
                   </Button>
                 </Stack>
               </Stack>
@@ -263,12 +266,12 @@ export default function ProductSyncCard() {
           <Card sectioned>
             <Stack vertical spacing="loose">
               <Stack distribution="equalSpacing" alignment="center">
-                <Stack vertical spacing="tight">
-                  <Text variant="headingMd">Sync Products from Third Party</Text>
-                  <Text variant="bodyMd" color="subdued">
-                    Import millions of products from your third-party supplier
-                  </Text>
-                </Stack>
+                              <Stack vertical spacing="tight">
+                <Text variant="headingMd">Sync Products from Third Party</Text>
+                <Text variant="bodyMd" color="subdued">
+                  Import products from your third-party supplier with optimized single-job processing
+                </Text>
+              </Stack>
                 <Button
                   primary
                   onClick={() => setShowSyncModal(true)}
@@ -344,10 +347,14 @@ export default function ProductSyncCard() {
               This will start syncing products from your third-party supplier to your Shopify store.
             </Text>
             <Text variant="bodyMd">
-              The sync will run in the background and may take several hours to complete depending on the number of products.
+              The sync will run in the background and process products in optimized batches for better performance.
             </Text>
             <Text variant="bodyMd">
-              <strong>Note:</strong> This is a demo that will create sample products. In a real implementation, 
+              <strong>Features:</strong> Only one sync job can run at a time, improved error handling, 
+              and better cancellation support.
+            </Text>
+            <Text variant="bodyMd">
+              <strong>Note:</strong> This demo will create 1000 sample products. In a real implementation, 
               this would connect to your actual third-party API.
             </Text>
           </TextContainer>
