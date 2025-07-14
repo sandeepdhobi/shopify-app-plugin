@@ -7,6 +7,7 @@ import serveStatic from "serve-static";
 import shopify from "./shopify.js";
 import productCreator from "./product-creator.js";
 import PrivacyWebhookHandlers from "./privacy.js";
+import { startSyncJob, getSyncJobStatus, getSyncJobsForShop, cancelSyncJob, forceCancelAllJobs } from "./queue/syncJobQueue.js";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
@@ -213,6 +214,94 @@ app.get("/api/orders/list", async (_req, res) => {
   } catch (e) {
     console.log(`Failed to fetch orders: ${e.message}`);
     res.status(500).send({ error: e.message });
+  }
+});
+
+// Product Sync Endpoints
+app.post("/api/products/sync", async (req, res) => {
+  try {
+    const session = res.locals.shopify.session;
+    const { batchSize = 10 } = req.body;
+    
+    const result = await startSyncJob(session, { batchSize });
+    
+    res.status(200).send({ 
+      success: true, 
+      message: "Sync job started successfully",
+      jobId: result.jobId 
+    });
+  } catch (error) {
+    console.error("Failed to start sync job:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.get("/api/products/sync/:jobId/status", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const jobStatus = await getSyncJobStatus(jobId);
+    
+    if (!jobStatus) {
+      res.status(404).send({ error: "Job not found" });
+      return;
+    }
+    
+    res.status(200).send({ job: jobStatus });
+  } catch (error) {
+    console.error("Failed to get sync job status:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.get("/api/products/sync/history", async (req, res) => {
+  try {
+    const session = res.locals.shopify.session;
+    const jobs = await getSyncJobsForShop(session.shop);
+    
+    res.status(200).send({ jobs });
+  } catch (error) {
+    console.error("Failed to get sync job history:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.delete("/api/products/sync/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const cancelled = await cancelSyncJob(jobId);
+    
+    if (!cancelled) {
+      res.status(404).send({ error: "Job not found or cannot be cancelled" });
+      return;
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      message: "Sync job cancelled successfully" 
+    });
+  } catch (error) {
+    console.error("Failed to cancel sync job:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.delete("/api/products/sync/force/all", async (req, res) => {
+  try {
+    const result = await forceCancelAllJobs();
+    
+    if (!result.success) {
+      res.status(500).send({ error: result.error });
+      return;
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      message: `Force cancelled ${result.cancelledCount} jobs`,
+      cancelledCount: result.cancelledCount
+    });
+  } catch (error) {
+    console.error("Failed to force cancel all jobs:", error.message);
+    res.status(500).send({ error: error.message });
   }
 });
 

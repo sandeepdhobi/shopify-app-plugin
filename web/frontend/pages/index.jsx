@@ -43,7 +43,7 @@ export default function HomePage() {
               <Stack vertical spacing="extraLoose" alignment="center">
                 <Stack.Item>
                   <div style={{ textAlign: "center" }}>
-                    <Text as="h1" variant="heading2xl" fontWeight="bold">
+                    <Text as="h2" variant="headingXl" fontWeight="bold">
                       Scale Your Store with 100M+ Products
                     </Text>
                     <Box paddingBlockStart="4">
