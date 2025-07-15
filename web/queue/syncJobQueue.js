@@ -71,33 +71,51 @@ const fetchProductsFromThirdParty = async (page = 1, limit = 100) => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 200));
   
-  const mockProducts = [];
-  const startId = (page - 1) * limit + 1;
-  const totalProducts = 15; // Reduced from 1 million to 1000 for testing
-  
-  for (let i = 0; i < limit && startId + i - 1 < totalProducts; i++) {
-    const id = startId + i - 1;
-    mockProducts.push({
-      id: `third-party-${id}`,
-      title: `Product ${id}`,
-      description: `Description for product ${id}`,
-      sku: `SKU-${String(id).padStart(6, '0')}`,
-      price: (Math.random() * 100 + 10).toFixed(2),
-      inventory_quantity: Math.floor(Math.random() * 100),
-      category: ['Electronics', 'Clothing', 'Home', 'Books'][Math.floor(Math.random() * 4)],
-      tags: ['new', 'popular', 'sale'].slice(0, Math.floor(Math.random() * 3) + 1),
-      vendor: 'Third Party Supplier',
-      weight: Math.random() * 2,
-      weight_unit: 'kg'
-    });
+  const response = await fetch('https://api.amazinge.store/partner/api/product', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': 'c19149459f35fc80455c2a7b4c41fdd5',
+      'origin': 'https://www.thwifty.com',
+      'referer': 'https://www.thwifty.com'
+    },
+    body: JSON.stringify({
+      offset_value: (page - 1) * limit
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
   }
   
+  const data = await response.json();
+  console.log('API Response:', data);
+  
+  // Map API products to expected format
+  const products = data.products ? data.products.map(apiProduct => ({
+    id: `third-party-${apiProduct.id}`,
+    title: apiProduct.title,
+    description: apiProduct.description,
+    sku: apiProduct.current_variants?.CPU || `SKU-${apiProduct.id}`,
+    price: apiProduct.price_in_usd?.toString() || '0',
+    inventory_quantity: apiProduct.in_stock || 0,
+    category: apiProduct.brand || 'Electronics',
+    tags: apiProduct.features ? apiProduct.features.slice(0, 3).map(feature => 
+      feature.split(' ').slice(0, 2).join(' ').toLowerCase()
+    ) : ['imported'],
+    vendor: apiProduct.brand || 'Third Party Supplier',
+    weight: apiProduct.weight_in_grams ? apiProduct.weight_in_grams / 1000 : 1, // Convert to kg
+    weight_unit: 'kg',
+    images: apiProduct.image_urls ? apiProduct.image_urls.split(',').map(url => url.trim()) : [apiProduct.main_image],
+    main_image: apiProduct.main_image
+  })) : [];
+  
   return {
-    products: mockProducts,
-    total: totalProducts,
+    products,
+    total: data.total || products.length,
     page,
     limit,
-    hasMore: page * limit < totalProducts
+    hasMore: data.has_more || false
   };
 };
 
@@ -108,12 +126,26 @@ const createShopifyProduct = async (session, product) => {
     const client = new shopify.api.clients.Graphql({ session });
     
     const mutation = `
-      mutation productCreate($input: ProductInput!) {
-        productCreate(input: $input) {
+      mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
+        productCreate(input: $input, media: $media) {
           product {
             id
             title
             handle
+            media(first: 10) {
+              edges {
+                node {
+                  id
+                  ... on MediaImage {
+                    image {
+                      id
+                      url
+                      altText
+                    }
+                  }
+                }
+              }
+            }
             variants(first: 1) {
               edges {
                 node {
@@ -139,11 +171,22 @@ const createShopifyProduct = async (session, product) => {
       productType: product.category,
       tags: product.tags
     };
+
+    // Prepare media input for images
+    const mediaInput = product.images ? product.images.map(imageUrl => ({
+      originalSource: imageUrl,
+      alt: product.title,
+      mediaContentType: 'IMAGE'
+    })) : [];
     
     console.log(`[DEBUG] Creating product with input:`, productInput);
+    console.log(`[DEBUG] Media input:`, mediaInput);
     
     const result = await client.request(mutation, {
-      variables: { input: productInput }
+      variables: { 
+        input: productInput,
+        media: mediaInput.length > 0 ? mediaInput : undefined
+      }
     });
     
     console.log(`[DEBUG] Product creation result:`, result);
@@ -155,7 +198,7 @@ const createShopifyProduct = async (session, product) => {
     
     const createdProduct = result.data.productCreate.product;
     
-    console.log(`[SUCCESS] Created product ${createdProduct.id} successfully`);
+    console.log(`[SUCCESS] Created product ${createdProduct.id} with ${createdProduct.media.edges.length} media items`);
     
     return createdProduct;
     
