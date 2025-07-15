@@ -3,7 +3,7 @@
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
 name = "DropShipper"
 handle = "fruitful-benchmark-app-13"
-application_url = "https://per-involve-murder-happy.trycloudflare.com"
+application_url = "https://computers-essays-notifications-gcc.trycloudflare.com"
 embedded = true
 
 [build]
@@ -19,9 +19,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://per-involve-murder-happy.trycloudflare.com/auth/callback",
-  "https://per-involve-murder-happy.trycloudflare.com/auth/shopify/callback",
-  "https://per-involve-murder-happy.trycloudflare.com/api/auth/callback"
+  "https://computers-essays-notifications-gcc.trycloudflare.com/auth/callback",
+  "https://computers-essays-notifications-gcc.trycloudflare.com/auth/shopify/callback",
+  "https://computers-essays-notifications-gcc.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

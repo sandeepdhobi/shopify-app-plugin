@@ -267,7 +267,7 @@ export default function ProductSyncCard() {
             <Stack vertical spacing="loose">
               <Stack distribution="equalSpacing" alignment="center">
                               <Stack vertical spacing="tight">
-                <Text variant="headingMd">Sync Products from Third Party</Text>
+                <Text variant="headingMd">Sync Products from AmazingE</Text>
                 <Text variant="bodyMd" color="subdued">
                   Import products from your third-party supplier with optimized single-job processing
                 </Text>
