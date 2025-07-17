@@ -125,7 +125,8 @@ const createShopifyProduct = async (session, product) => {
     console.log(`[DEBUG] Creating Shopify GraphQL client for shop: ${session.shop}`);
     const client = new shopify.api.clients.Graphql({ session });
     
-    const mutation = `
+    // First, create the product without variants
+    const createProductMutation = `
       mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
         productCreate(input: $input, media: $media) {
           product {
@@ -164,6 +165,7 @@ const createShopifyProduct = async (session, product) => {
       }
     `;
     
+    // Product input without variants (variants are not allowed in ProductInput)
     const productInput = {
       title: product.title,
       descriptionHtml: product.description,
@@ -182,7 +184,7 @@ const createShopifyProduct = async (session, product) => {
     console.log(`[DEBUG] Creating product with input:`, productInput);
     console.log(`[DEBUG] Media input:`, mediaInput);
     
-    const result = await client.request(mutation, {
+    const result = await client.request(createProductMutation, {
       variables: { 
         input: productInput,
         media: mediaInput.length > 0 ? mediaInput : undefined
@@ -197,6 +199,130 @@ const createShopifyProduct = async (session, product) => {
     }
     
     const createdProduct = result.data.productCreate.product;
+    
+    // Now update the default variant with price and other properties
+    if (createdProduct.variants.edges.length > 0) {
+      const defaultVariantId = createdProduct.variants.edges[0].node.id;
+      
+      const updateVariantMutation = `
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
+              id
+              price
+              sku
+              inventoryQuantity
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      const variantInput = {
+        id: defaultVariantId,
+        price: product.price,
+        inventoryItem: {
+          sku: product.sku,
+          // tracked: true
+        }
+      };
+      
+      console.log(`[DEBUG] Updating variant with input:`, variantInput);
+      
+      const variantResult = await client.request(updateVariantMutation, {
+        variables: { 
+          productId: createdProduct.id,
+          variants: [variantInput]
+        }
+      });
+      
+      console.log(`[DEBUG] Variant update result:`, variantResult);
+      
+      if (variantResult.data.productVariantsBulkUpdate.userErrors.length > 0) {
+        const error = variantResult.data.productVariantsBulkUpdate.userErrors[0];
+        console.warn(`[WARNING] Variant update failed: ${error.message} (field: ${error.field})`);
+        // Don't throw here as the product was created successfully
+      } else {
+        // Handle inventory quantity separately if variant update was successful
+        const inventoryQuantity = product.inventory_quantity || 15;
+        if (inventoryQuantity > 0) {
+          try {
+            const updatedVariant = variantResult.data.productVariantsBulkUpdate.productVariants[0];
+            
+            // Get inventory item ID from the updated variant
+            const inventoryItemQuery = `
+              query getInventoryItem($variantId: ID!) {
+                productVariant(id: $variantId) {
+                  inventoryItem {
+                    id
+                    inventoryLevels(first: 1) {
+                      nodes {
+                        id
+                        location {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const inventoryItemResult = await client.request(inventoryItemQuery, {
+              variables: { variantId: updatedVariant.id }
+            });
+            
+            const inventoryItem = inventoryItemResult.data.productVariant.inventoryItem;
+            if (inventoryItem && inventoryItem.inventoryLevels.nodes.length > 0) {
+              const inventoryLevelId = inventoryItem.inventoryLevels.nodes[0].id;
+              
+              // Set inventory quantity
+              const inventoryMutation = `
+                mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+                  inventorySetQuantities(input: $input) {
+                    inventoryAdjustmentGroup {
+                      id
+                    }
+                    userErrors {
+                      field
+                      message
+                    }
+                  }
+                }
+              `;
+              
+              const inventoryInput = {
+                reason: "correction",
+                name: "available",
+                ignoreCompareQuantity: true,
+                quantities: [
+                  {
+                    inventoryLevelId: inventoryLevelId,
+                    quantity: inventoryQuantity
+                  }
+                ]
+              };
+              
+              const inventoryResult = await client.request(inventoryMutation, {
+                variables: { input: inventoryInput }
+              });
+              
+              if (inventoryResult.data.inventorySetQuantities.userErrors.length > 0) {
+                const inventoryError = inventoryResult.data.inventorySetQuantities.userErrors[0];
+                console.warn(`[WARNING] Inventory update failed: ${inventoryError.message} (field: ${inventoryError.field})`);
+              } else {
+                console.log(`[SUCCESS] Set inventory quantity to ${inventoryQuantity} for variant ${updatedVariant.id}`);
+              }
+            }
+          } catch (inventoryError) {
+            console.warn(`[WARNING] Failed to set inventory quantity: ${inventoryError.message}`);
+          }
+        }
+      }
+    }
     
     console.log(`[SUCCESS] Created product ${createdProduct.id} with ${createdProduct.media.edges.length} media items`);
     
