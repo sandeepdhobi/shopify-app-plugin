@@ -125,7 +125,11 @@ const createShopifyProduct = async (session, product) => {
     console.log(`[DEBUG] Creating Shopify GraphQL client for shop: ${session.shop}`);
     const client = new shopify.api.clients.Graphql({ session });
     
-    // First, create the product without variants
+    
+    const onlineStoreId = "gid://shopify/Publication/168777810076"; //  onlineStoreSalesChannel?.node.id;
+    console.log(`[DEBUG] Online Store sales channel ID: ${onlineStoreId}`);
+    
+    // Create the product without variants
     const createProductMutation = `
       mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
         productCreate(input: $input, media: $media) {
@@ -321,6 +325,59 @@ const createShopifyProduct = async (session, product) => {
             console.warn(`[WARNING] Failed to set inventory quantity: ${inventoryError.message}`);
           }
         }
+      }
+    }
+    
+    // Publish the product to the Online Store sales channel
+    if (onlineStoreId) {
+      try {
+        console.log(`[DEBUG] Publishing product ${createdProduct.id} to Online Store sales channel...`);
+        
+        const publishProductMutation = `
+          mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+            publishablePublish(id: $id, input: $input) {
+              publishable {
+                ... on Product {
+                  id
+                  title
+                  publishedAt
+                }
+              }
+              shop {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+        
+        const publishResult = await client.request(publishProductMutation, {
+          variables: {
+            id: createdProduct.id,
+            input: [
+              {
+                publicationId: onlineStoreId,
+                publishDate: new Date().toISOString()
+              }
+            ]
+          }
+        });
+        
+        console.log(`[DEBUG] Product publish result:`, publishResult);
+        
+        if (publishResult.data.publishablePublish.userErrors.length > 0) {
+          const publishError = publishResult.data.publishablePublish.userErrors[0];
+          console.warn(`[WARNING] Product publish failed: ${publishError.message} (field: ${publishError.field})`);
+        } else {
+          console.log(`[SUCCESS] Product ${createdProduct.id} published to Online Store successfully`);
+        }
+        
+      } catch (publishError) {
+        console.warn(`[WARNING] Failed to publish product to Online Store: ${publishError.message}`);
+        // Don't throw here as the product was created successfully
       }
     }
     

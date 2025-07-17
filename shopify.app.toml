@@ -3,7 +3,7 @@
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
 name = "DropShipper"
 handle = "fruitful-benchmark-app-13"
-application_url = "https://columnists-motors-salvador-rehab.trycloudflare.com"
+application_url = "https://citizen-elementary-invoice-phenomenon.trycloudflare.com"
 embedded = true
 
 [build]
@@ -15,13 +15,13 @@ api_version = "2025-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,read_publications,read_inventory,write_publications"
 
 [auth]
 redirect_urls = [
-  "https://columnists-motors-salvador-rehab.trycloudflare.com/auth/callback",
-  "https://columnists-motors-salvador-rehab.trycloudflare.com/auth/shopify/callback",
-  "https://columnists-motors-salvador-rehab.trycloudflare.com/api/auth/callback"
+  "https://citizen-elementary-invoice-phenomenon.trycloudflare.com/auth/callback",
+  "https://citizen-elementary-invoice-phenomenon.trycloudflare.com/auth/shopify/callback",
+  "https://citizen-elementary-invoice-phenomenon.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
