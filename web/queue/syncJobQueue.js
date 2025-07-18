@@ -67,7 +67,7 @@ const getAllSyncJobs = async (shopDomain) => {
 };
 
 // Improved mock third-party API endpoint with reasonable product counts
-const fetchProductsFromThirdParty = async (page = 1, limit = 100) => {
+const fetchProductsFromThirdParty = async (offset_value = 0, limit = 100) => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 200));
   
@@ -80,7 +80,7 @@ const fetchProductsFromThirdParty = async (page = 1, limit = 100) => {
       'referer': 'https://www.thwifty.com'
     },
     body: JSON.stringify({
-      offset_value: (page - 1) * limit
+      offset_value
     })
   });
 
@@ -113,7 +113,7 @@ const fetchProductsFromThirdParty = async (page = 1, limit = 100) => {
   return {
     products,
     total: data.total || products.length,
-    page,
+    offset_value: data.next_offset_value,
     limit,
     hasMore: data.has_more || false
   };
@@ -392,7 +392,7 @@ const createShopifyProduct = async (session, product) => {
 };
 
 // Optimized job processing function with better error handling and debugging
-const processJob = async (jobId, session, batchSize = 10) => {
+const processJob = async (jobId, session, batchSize = 50) => {
   console.log(`[DEBUG] Starting sync job ${jobId} with batch size ${batchSize}`);
   console.log(`[DEBUG] Session details:`, { shop: session?.shop, accessToken: session?.accessToken ? 'present' : 'missing' });
   
@@ -405,35 +405,45 @@ const processJob = async (jobId, session, batchSize = 10) => {
     await updateJobStatus(jobId, { status: 'processing' });
     console.log(`[DEBUG] Job ${jobId}: Status updated to processing`);
     
-    // Get total products count
+    // Get total products count - fetch a larger batch to get accurate total
     console.log(`[DEBUG] Job ${jobId}: Fetching total products count...`);
-    const firstBatch = await fetchProductsFromThirdParty(1, 1);
-    const totalProducts = firstBatch.total;
+    const firstBatch = await fetchProductsFromThirdParty(0, batchSize);
     
-    console.log(`[DEBUG] Job ${jobId}: Found ${totalProducts} total products to sync`);
+    // If API doesn't provide total, we'll update it as we go
+    const totalProducts = firstBatch.total && firstBatch.total > firstBatch.products.length ? firstBatch.total : null;
+    
+    console.log(`[DEBUG] Job ${jobId}: API returned total: ${firstBatch.total}, using: ${totalProducts || 'unknown - will update as we process'}`);
     
     await updateJobStatus(jobId, { 
       status: 'processing',
-      total_products: totalProducts 
+      total_products: totalProducts || 0 
     });
     
     let processedProducts = 0;
     let failedProducts = 0;
-    let page = 1;
+    let offset_value = 0;
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 50; // Reduced for better error detection
     
+    // Use the first batch we already fetched
+    let batch = firstBatch;
+    let isFirstBatch = true;
+    
     while (currentJob && currentJob.id === jobId && currentJob.status === 'processing') {
-      console.log(`[DEBUG] Job ${jobId}: Starting batch ${page}`);
+      console.log(`[DEBUG] Job ${jobId}: Processing batch ${offset_value}`);
       
-      const batch = await fetchProductsFromThirdParty(page, batchSize);
+      // If not the first batch, fetch new data
+      if (!isFirstBatch) {
+        batch = await fetchProductsFromThirdParty(offset_value, batchSize);
+      }
+      isFirstBatch = false;
       
       if (!batch.products || batch.products.length === 0) {
         console.log(`[DEBUG] Job ${jobId}: No more products to process`);
         break;
       }
       
-      console.log(`[DEBUG] Job ${jobId}: Processing batch ${page} (${batch.products.length} products)`);
+      console.log(`[DEBUG] Job ${jobId}: Processing batch ${offset_value} (${batch.products.length} products)`);
       
       // Process products sequentially to avoid overwhelming the API
       for (const product of batch.products) {
@@ -481,15 +491,20 @@ const processJob = async (jobId, session, batchSize = 10) => {
       });
       
       // Log progress
-      const progress = ((processedProducts + failedProducts) / totalProducts * 100).toFixed(1);
-      console.log(`[DEBUG] Job ${jobId}: Progress ${progress}% (${processedProducts} processed, ${failedProducts} failed)`);
+      if (totalProducts && totalProducts > 0) {
+        const progress = ((processedProducts + failedProducts) / totalProducts * 100).toFixed(1);
+        console.log(`[DEBUG] Job ${jobId}: Progress ${progress}% (${processedProducts} processed, ${failedProducts} failed)`);
+      } else {
+        console.log(`[DEBUG] Job ${jobId}: Progress unknown - ${processedProducts} processed, ${failedProducts} failed`);
+      }
       
-      if (!batch.hasMore) {
-        console.log(`[DEBUG] Job ${jobId}: All batches processed`);
+      // Check if we have a next offset value to continue
+      if (batch.offset_value === null || batch.offset_value === undefined) {
+        console.log(`[DEBUG] Job ${jobId}: No more offset_value, all batches processed`);
         break;
       }
       
-      page++;
+      offset_value = batch.offset_value;
     }
     
     // Final status update
@@ -518,11 +533,21 @@ const processJob = async (jobId, session, batchSize = 10) => {
 };
 
 // Start a sync job (only one allowed at a time)
+// Options:
+//   - batchSize: Number of products to process per batch (default: 50, max: 100)
 export const startSyncJob = async (session, options = {}) => {
   // Check if a job is already running
   if (currentJob) {
     throw new Error('A sync job is already running. Please wait for it to complete or cancel it first.');
   }
+  
+  // Validate and set batch size
+  const batchSize = options.batchSize || 50;
+  if (batchSize < 1 || batchSize > 100) {
+    throw new Error('Batch size must be between 1 and 100 products');
+  }
+  
+  console.log(`[DEBUG] Starting sync job with batch size: ${batchSize}`);
   
   const jobId = uuidv4();
   const shopDomain = session.shop;
@@ -553,7 +578,7 @@ export const startSyncJob = async (session, options = {}) => {
   
   // Start processing immediately with debugging
   console.log(`[DEBUG] Starting processJob for ${jobId} with session shop: ${session?.shop}`);
-  processJob(jobId, session, options.batchSize || 10).catch(error => {
+  processJob(jobId, session, batchSize).catch(error => {
     console.error(`[ERROR] Error in processJob for ${jobId}:`, error);
     console.error(`[ERROR] Stack trace:`, error.stack);
     currentJob = null;

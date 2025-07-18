@@ -50,7 +50,7 @@ export default function ProductSyncCard() {
 
   // Start sync mutation
   const startSyncMutation = useMutation({
-    mutationFn: async ({ batchSize = 10 }) => {
+    mutationFn: async ({ batchSize = 50 }) => {
       const response = await fetch("/api/products/sync", {
         method: "POST",
         headers: {
@@ -166,7 +166,7 @@ export default function ProductSyncCard() {
   }, [jobStatus, queryClient]);
 
   const handleStartSync = () => {
-    startSyncMutation.mutate({ batchSize: 10 });
+    startSyncMutation.mutate({ batchSize: 50 });
   };
 
   const handleCancelSync = () => {
@@ -226,19 +226,22 @@ export default function ProductSyncCard() {
                   <Badge {...getStatusBadge(currentJob?.status)} />
                 </Stack>
                 
-                {currentJob?.total_products > 0 && (
-                  <Stack vertical spacing="tight">
+                <Stack vertical spacing="tight">
+                  {currentJob?.total_products > 0 && (
                     <ProgressBar progress={getProgressPercentage()} />
-                    <Text variant="bodyMd" color="subdued">
-                      {currentJob?.processed_products || 0} of {currentJob?.total_products} products synced
-                      {currentJob?.failed_products > 0 && (
-                        <span style={{ color: "#d72c0d" }}>
-                          {" "}({currentJob.failed_products} failed)
-                        </span>
-                      )}
-                    </Text>
-                  </Stack>
-                )}
+                  )}
+                  <Text variant="bodyMd" color="subdued">
+                    {currentJob?.processed_products || 0} products synced
+                    {currentJob?.total_products > 0 && (
+                      <span> of {currentJob.total_products}</span>
+                    )}
+                    {currentJob?.failed_products > 0 && (
+                      <span style={{ color: "#d72c0d" }}>
+                        {" "}({currentJob.failed_products} failed)
+                      </span>
+                    )}
+                  </Text>
+                </Stack>
                 
                 <Stack spacing="tight">
                   <Button
