@@ -79,46 +79,7 @@ export default function ProductSyncCard() {
     },
   });
 
-  // Cancel sync mutation
-  const cancelSyncMutation = useMutation({
-    mutationFn: async (jobId) => {
-      const response = await fetch(`/api/products/sync/${jobId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to cancel sync");
-      return response.json();
-    },
-    onSuccess: () => {
-      setActiveSyncJob(null);
-      setToastMessage("Sync job cancelled successfully!");
-      setToastError(false);
-      setShowToast(true);
-      queryClient.invalidateQueries(["syncHistory"]);
-    },
-    onError: async (error) => {
-      console.warn("Regular cancel failed, trying force cancel all jobs...");
-      // If regular cancel fails, try force cancel all jobs
-      try {
-        const forceResponse = await fetch("/api/products/sync/force/all", {
-          method: "DELETE",
-        });
-        if (forceResponse.ok) {
-          const result = await forceResponse.json();
-          setActiveSyncJob(null);
-          setToastMessage(`Force cancelled all jobs (${result.cancelledCount} jobs)`);
-          setToastError(false);
-          setShowToast(true);
-          queryClient.invalidateQueries(["syncHistory"]);
-        } else {
-          throw new Error("Force cancel also failed");
-        }
-      } catch (forceError) {
-        setToastMessage(`Cancel failed: ${error.message}. Force cancel also failed.`);
-        setToastError(true);
-        setShowToast(true);
-      }
-    },
-  });
+
 
   // Force cancel all jobs mutation
   const forceCancelAllMutation = useMutation({
@@ -143,11 +104,67 @@ export default function ProductSyncCard() {
     },
   });
 
+  // Pause sync mutation
+  const pauseSyncMutation = useMutation({
+    mutationFn: async (jobId) => {
+      const response = await fetch(`/api/products/sync/${jobId}/pause`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to pause sync");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      setToastMessage("Sync job paused successfully!");
+      setToastError(false);
+      setShowToast(true);
+      queryClient.invalidateQueries(["syncHistory"]);
+      queryClient.invalidateQueries(["syncJobStatus", activeSyncJob]);
+    },
+    onError: (error) => {
+      setToastMessage(`Pause failed: ${error.message}`);
+      setToastError(true);
+      setShowToast(true);
+    },
+  });
+
+  // Resume sync mutation
+  const resumeSyncMutation = useMutation({
+    mutationFn: async ({ jobId, batchSize = 50 }) => {
+      const response = await fetch(`/api/products/sync/${jobId}/resume`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ batchSize }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to resume sync");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      setToastMessage("Sync job resumed successfully!");
+      setToastError(false);
+      setShowToast(true);
+      queryClient.invalidateQueries(["syncHistory"]);
+      queryClient.invalidateQueries(["syncJobStatus", activeSyncJob]);
+    },
+    onError: (error) => {
+      setToastMessage(`Resume failed: ${error.message}`);
+      setToastError(true);
+      setShowToast(true);
+    },
+  });
+
   // Check if there's an active job on mount
   useEffect(() => {
     if (syncHistory?.jobs) {
       const activeJob = syncHistory.jobs.find(
-        (job) => job.status === "processing" || job.status === "queued"
+        (job) => job.status === "processing" || job.status === "queued" || job.status === "paused"
       );
       if (activeJob) {
         setActiveSyncJob(activeJob.id);
@@ -157,7 +174,7 @@ export default function ProductSyncCard() {
 
   // Clear active job when it completes
   useEffect(() => {
-    if (jobStatus?.job && (jobStatus.job.status === "completed" || jobStatus.job.status === "failed")) {
+    if (jobStatus?.job && (jobStatus.job.status === "completed" || jobStatus.job.status === "failed" || jobStatus.job.status === "cancelled")) {
       setTimeout(() => {
         setActiveSyncJob(null);
         queryClient.invalidateQueries(["syncHistory"]);
@@ -169,14 +186,20 @@ export default function ProductSyncCard() {
     startSyncMutation.mutate({ batchSize: 50 });
   };
 
-  const handleCancelSync = () => {
+  const handleForceCancelAll = () => {
+    forceCancelAllMutation.mutate();
+  };
+
+  const handlePauseSync = () => {
     if (activeSyncJob) {
-      cancelSyncMutation.mutate(activeSyncJob);
+      pauseSyncMutation.mutate(activeSyncJob);
     }
   };
 
-  const handleForceCancelAll = () => {
-    forceCancelAllMutation.mutate();
+  const handleResumeSync = () => {
+    if (activeSyncJob) {
+      resumeSyncMutation.mutate({ jobId: activeSyncJob, batchSize: 50 });
+    }
   };
 
   const formatDate = (dateString) => {
@@ -188,6 +211,7 @@ export default function ProductSyncCard() {
       completed: { status: "success", children: "Completed" },
       processing: { status: "info", children: "Processing" },
       queued: { status: "attention", children: "Queued" },
+      paused: { status: "warning", children: "Paused" },
       failed: { status: "critical", children: "Failed" },
       cancelled: { status: "warning", children: "Cancelled" },
     };
@@ -202,7 +226,7 @@ export default function ProductSyncCard() {
   };
 
   const currentJob = jobStatus?.job || null;
-  const isActiveSync = activeSyncJob && (currentJob?.status === "processing" || currentJob?.status === "queued");
+  const isActiveSync = activeSyncJob && (currentJob?.status === "processing" || currentJob?.status === "queued" || currentJob?.status === "paused");
 
   const toastMarkup = showToast ? (
     <Toast
@@ -218,10 +242,12 @@ export default function ProductSyncCard() {
           {isActiveSync && (
             <Card sectioned>
               <Stack vertical spacing="tight">
-                <Stack distribution="equalSpacing" alignment="center">
+                                  <Stack distribution="equalSpacing" alignment="center">
                   <Stack alignment="center" spacing="tight">
-                    <Spinner size="small" />
-                    <Text variant="headingMd">Sync in Progress</Text>
+                    {currentJob?.status !== "paused" && <Spinner size="small" />}
+                    <Text variant="headingMd">
+                      {currentJob?.status === "paused" ? "Sync Paused" : "Sync in Progress"}
+                    </Text>
                   </Stack>
                   <Badge {...getStatusBadge(currentJob?.status)} />
                 </Stack>
@@ -244,21 +270,32 @@ export default function ProductSyncCard() {
                 </Stack>
                 
                 <Stack spacing="tight">
+                  {/* Show different buttons based on job status */}
+                  {currentJob?.status === "processing" && (
+                    <Button
+                      onClick={handlePauseSync}
+                      loading={pauseSyncMutation.isLoading}
+                    >
+                      Pause Sync
+                    </Button>
+                  )}
+                  
+                  {currentJob?.status === "paused" && (
+                    <Button
+                      primary
+                      onClick={handleResumeSync}
+                      loading={resumeSyncMutation.isLoading}
+                    >
+                      Resume Sync
+                    </Button>
+                  )}
+                  
                   <Button
                     destructive
-                    onClick={handleCancelSync}
-                    loading={cancelSyncMutation.isLoading}
-                    disabled={currentJob?.status !== "processing"}
-                  >
-                    Cancel Sync
-                  </Button>
-                  <Button
-                    destructive
-                    outline
                     onClick={handleForceCancelAll}
                     loading={forceCancelAllMutation.isLoading}
                   >
-                    Force Cancel
+                    Force Cancel All
                   </Button>
                 </Stack>
               </Stack>

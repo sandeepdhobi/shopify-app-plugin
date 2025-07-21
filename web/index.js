@@ -7,7 +7,7 @@ import serveStatic from "serve-static";
 import shopify from "./shopify.js";
 import productCreator from "./product-creator.js";
 import PrivacyWebhookHandlers from "./privacy.js";
-import { startSyncJob, getSyncJobStatus, getSyncJobsForShop, cancelSyncJob, forceCancelAllJobs, getCurrentJobStatus } from "./queue/syncJobQueue.js";
+import { startSyncJob, getSyncJobStatus, getSyncJobsForShop, forceCancelAllJobs, getCurrentJobStatus, pauseSyncJob, resumeSyncJob } from "./queue/syncJobQueue.js";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
@@ -265,25 +265,7 @@ app.get("/api/products/sync/history", async (req, res) => {
   }
 });
 
-app.delete("/api/products/sync/:jobId", async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const result = await cancelSyncJob(jobId);
-    
-    if (!result.success) {
-      res.status(404).send({ error: result.error || "Job not found or cannot be cancelled" });
-      return;
-    }
-    
-    res.status(200).send({ 
-      success: true, 
-      message: "Sync job cancelled successfully" 
-    });
-  } catch (error) {
-    console.error("Failed to cancel sync job:", error.message);
-    res.status(500).send({ error: error.message });
-  }
-});
+
 
 app.delete("/api/products/sync/force/all", async (req, res) => {
   try {
@@ -301,6 +283,51 @@ app.delete("/api/products/sync/force/all", async (req, res) => {
     });
   } catch (error) {
     console.error("Failed to force cancel all jobs:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Pause sync job
+app.post("/api/products/sync/:jobId/pause", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const result = await pauseSyncJob(jobId);
+    
+    if (!result.success) {
+      res.status(400).send({ error: result.error || "Failed to pause sync job" });
+      return;
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      message: "Sync job paused successfully" 
+    });
+  } catch (error) {
+    console.error("Failed to pause sync job:", error.message);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Resume sync job
+app.post("/api/products/sync/:jobId/resume", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const session = res.locals.shopify.session;
+    const { batchSize = 50 } = req.body;
+    
+    const result = await resumeSyncJob(jobId, session, { batchSize });
+    
+    if (!result.success) {
+      res.status(400).send({ error: result.error || "Failed to resume sync job" });
+      return;
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      message: "Sync job resumed successfully" 
+    });
+  } catch (error) {
+    console.error("Failed to resume sync job:", error.message);
     res.status(500).send({ error: error.message });
   }
 });

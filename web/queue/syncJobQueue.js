@@ -23,11 +23,19 @@ db.serialize(() => {
       total_products INTEGER,
       processed_products INTEGER DEFAULT 0,
       failed_products INTEGER DEFAULT 0,
+      current_offset INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       error_message TEXT
     )
   `);
+  
+  // Add current_offset column if it doesn't exist (for existing databases)
+  db.run(`ALTER TABLE sync_jobs ADD COLUMN current_offset INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding current_offset column:', err);
+    }
+  });
 });
 
 // Update job status in database
@@ -392,7 +400,7 @@ const createShopifyProduct = async (session, product) => {
 };
 
 // Optimized job processing function with better error handling and debugging
-const processJob = async (jobId, session, batchSize = 50) => {
+const processJob = async (jobId, session, batchSize = 50, resumeFromOffset = null) => {
   console.log(`[DEBUG] Starting sync job ${jobId} with batch size ${batchSize}`);
   console.log(`[DEBUG] Session details:`, { shop: session?.shop, accessToken: session?.accessToken ? 'present' : 'missing' });
   
@@ -405,38 +413,39 @@ const processJob = async (jobId, session, batchSize = 50) => {
     await updateJobStatus(jobId, { status: 'processing' });
     console.log(`[DEBUG] Job ${jobId}: Status updated to processing`);
     
-    // Get total products count - fetch a larger batch to get accurate total
-    console.log(`[DEBUG] Job ${jobId}: Fetching total products count...`);
-    const firstBatch = await fetchProductsFromThirdParty(0, batchSize);
+    // Get current job state from database to check for resume
+    const currentJobState = await getJobStatus(jobId);
+    let processedProducts = currentJobState?.processed_products || 0;
+    let failedProducts = currentJobState?.failed_products || 0;
+    let offset_value = resumeFromOffset !== null ? resumeFromOffset : (currentJobState?.current_offset || 0);
     
-    // If API doesn't provide total, we'll update it as we go
-    const totalProducts = firstBatch.total && firstBatch.total > firstBatch.products.length ? firstBatch.total : null;
+    console.log(`[DEBUG] Job ${jobId}: Resuming from offset ${offset_value}, processed: ${processedProducts}, failed: ${failedProducts}`);
     
-    console.log(`[DEBUG] Job ${jobId}: API returned total: ${firstBatch.total}, using: ${totalProducts || 'unknown - will update as we process'}`);
+    // Get total products count - fetch a batch to get accurate total (only if not resuming or total not set)
+    let totalProducts = currentJobState?.total_products;
+    if (!totalProducts || totalProducts === 0) {
+      console.log(`[DEBUG] Job ${jobId}: Fetching total products count...`);
+      const initialBatch = await fetchProductsFromThirdParty(0, batchSize);
+      totalProducts = initialBatch.total && initialBatch.total > initialBatch.products.length ? initialBatch.total : null;
+      console.log(`[DEBUG] Job ${jobId}: API returned total: ${initialBatch.total}, using: ${totalProducts || 'unknown - will update as we process'}`);
+      
+      await updateJobStatus(jobId, { 
+        status: 'processing',
+        total_products: totalProducts || 0 
+      });
+    }
     
-    await updateJobStatus(jobId, { 
-      status: 'processing',
-      total_products: totalProducts || 0 
-    });
-    
-    let processedProducts = 0;
-    let failedProducts = 0;
-    let offset_value = 0;
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 50; // Reduced for better error detection
     
-    // Use the first batch we already fetched
-    let batch = firstBatch;
-    let isFirstBatch = true;
-    
     while (currentJob && currentJob.id === jobId && currentJob.status === 'processing') {
-      console.log(`[DEBUG] Job ${jobId}: Processing batch ${offset_value}`);
+      console.log(`[DEBUG] Job ${jobId}: Processing batch at offset ${offset_value}`);
       
-      // If not the first batch, fetch new data
-      if (!isFirstBatch) {
-        batch = await fetchProductsFromThirdParty(offset_value, batchSize);
-      }
-      isFirstBatch = false;
+      // Fetch data for current offset
+      const batch = await fetchProductsFromThirdParty(offset_value, batchSize);
+      
+      // Update current offset in database for pause/resume functionality
+      await updateJobStatus(jobId, { current_offset: offset_value });
       
       if (!batch.products || batch.products.length === 0) {
         console.log(`[DEBUG] Job ${jobId}: No more products to process`);
@@ -447,9 +456,26 @@ const processJob = async (jobId, session, batchSize = 50) => {
       
       // Process products sequentially to avoid overwhelming the API
       for (const product of batch.products) {
-        // Check if job was cancelled
-        if (!currentJob || currentJob.id !== jobId || currentJob.status !== 'processing') {
+        // Check if job was cancelled or paused
+        if (!currentJob || currentJob.id !== jobId) {
+          console.log(`[DEBUG] Job ${jobId}: Job reference lost, stopping processing`);
+          return;
+        }
+        
+        if (currentJob.status === 'cancelled') {
           console.log(`[DEBUG] Job ${jobId}: Job was cancelled, stopping processing`);
+          return;
+        }
+        
+        if (currentJob.status === 'paused') {
+          console.log(`[DEBUG] Job ${jobId}: Job was paused, stopping processing`);
+          // Update final state before pausing
+          await updateJobStatus(jobId, { 
+            processed_products: processedProducts,
+            failed_products: failedProducts,
+            current_offset: offset_value,
+            status: 'paused'
+          });
           return;
         }
         
@@ -555,9 +581,9 @@ export const startSyncJob = async (session, options = {}) => {
   // Create job record in database
   try {
     await dbRun(`
-      INSERT INTO sync_jobs (id, shop_domain, status, total_products, processed_products, failed_products)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, jobId, shopDomain, 'queued', 0, 0, 0);
+      INSERT INTO sync_jobs (id, shop_domain, status, total_products, processed_products, failed_products, current_offset)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, jobId, shopDomain, 'queued', 0, 0, 0, 0);
   } catch (error) {
     console.error('Error creating sync job:', error);
     throw error;
@@ -570,7 +596,8 @@ export const startSyncJob = async (session, options = {}) => {
     status: 'queued',
     total_products: 0,
     processed_products: 0,
-    failed_products: 0
+    failed_products: 0,
+    current_offset: 0
   };
   
   // Create abort controller for cancellation
@@ -606,32 +633,7 @@ export const getSyncJobsForShop = async (shopDomain) => {
   return { jobs };
 };
 
-// Simplified cancel job function
-export const cancelSyncJob = async (jobId) => {
-  try {
-    if (currentJob && currentJob.id === jobId) {
-      currentJob.status = 'cancelled';
-      await updateJobStatus(jobId, { status: 'cancelled' });
-      
-      if (currentJobController) {
-        currentJobController.abort();
-      }
-      
-      currentJob = null;
-      currentJobController = null;
-      
-      console.log(`Job ${jobId} cancelled successfully`);
-      return { success: true };
-    }
-    
-    // If job not in memory, update database
-    await updateJobStatus(jobId, { status: 'cancelled' });
-    return { success: true };
-  } catch (error) {
-    console.error('Error cancelling sync job:', error);
-    return { success: false, error: error.message };
-  }
-};
+
 
 // Cancel all jobs (simplified since only one can run at a time)
 export const forceCancelAllJobs = async () => {
@@ -639,21 +641,121 @@ export const forceCancelAllJobs = async () => {
     let cancelledCount = 0;
     
     if (currentJob) {
-      await cancelSyncJob(currentJob.id);
+      // Cancel the current job directly
+      currentJob.status = 'cancelled';
+      await updateJobStatus(currentJob.id, { status: 'cancelled' });
+      
+      if (currentJobController) {
+        currentJobController.abort();
+      }
+      
+      console.log(`Force cancelled current job ${currentJob.id}`);
+      currentJob = null;
+      currentJobController = null;
       cancelledCount = 1;
     }
     
-    // Update any remaining processing/queued jobs in database
+    // Update any remaining processing/queued/paused jobs in database
     await dbRun(`
       UPDATE sync_jobs 
       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
-      WHERE status IN ('processing', 'queued')
+      WHERE status IN ('processing', 'queued', 'paused')
     `);
     
     console.log(`Force cancelled ${cancelledCount} jobs`);
     return { success: true, cancelledCount };
   } catch (error) {
     console.error('Error in forceCancelAllJobs:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Pause a sync job
+export const pauseSyncJob = async (jobId) => {
+  try {
+    // Check if this is the currently running job
+    if (currentJob && currentJob.id === jobId && currentJob.status === 'processing') {
+      // Set the in-memory job status to paused - the processing loop will handle the rest
+      currentJob.status = 'paused';
+      console.log(`[DEBUG] Job ${jobId}: Pause requested, processing loop will handle the pause`);
+      return { success: true };
+    }
+    
+    // If job exists in database but isn't currently running, update database directly
+    const dbJob = await getJobStatus(jobId);
+    if (dbJob) {
+      if (dbJob.status === 'processing' || dbJob.status === 'queued') {
+        await updateJobStatus(jobId, { status: 'paused' });
+        console.log(`[DEBUG] Job ${jobId}: Paused in database`);
+        return { success: true };
+      } else {
+        return { success: false, error: `Job is in ${dbJob.status} state and cannot be paused` };
+      }
+    }
+    
+    return { success: false, error: 'Job not found' };
+  } catch (error) {
+    console.error(`Error pausing sync job ${jobId}:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Resume a paused sync job
+export const resumeSyncJob = async (jobId, session, options = {}) => {
+  try {
+    // Check if another job is already running
+    if (currentJob && currentJob.id !== jobId) {
+      throw new Error('Another sync job is already running. Please wait for it to complete or cancel it first.');
+    }
+    
+    // Get job from database
+    const dbJob = await getJobStatus(jobId);
+    if (!dbJob) {
+      return { success: false, error: 'Job not found' };
+    }
+    
+    if (dbJob.status !== 'paused') {
+      return { success: false, error: `Job is in ${dbJob.status} state and cannot be resumed` };
+    }
+    
+    // Validate session
+    if (!session || !session.shop || !session.accessToken) {
+      throw new Error('Invalid session - missing shop or accessToken');
+    }
+    
+    // Set up current job in memory
+    currentJob = {
+      id: jobId,
+      shop_domain: dbJob.shop_domain,
+      status: 'processing',
+      total_products: dbJob.total_products,
+      processed_products: dbJob.processed_products,
+      failed_products: dbJob.failed_products,
+      current_offset: dbJob.current_offset
+    };
+    
+    // Create abort controller for cancellation
+    currentJobController = new AbortController();
+    
+    // Validate and set batch size
+    const batchSize = options.batchSize || 50;
+    if (batchSize < 1 || batchSize > 100) {
+      throw new Error('Batch size must be between 1 and 100 products');
+    }
+    
+    console.log(`[DEBUG] Resuming sync job ${jobId} from offset ${dbJob.current_offset} with batch size: ${batchSize}`);
+    
+    // Start processing from the stored offset
+    processJob(jobId, session, batchSize, dbJob.current_offset).catch(error => {
+      console.error(`[ERROR] Error in processJob for resumed job ${jobId}:`, error);
+      console.error(`[ERROR] Stack trace:`, error.stack);
+      currentJob = null;
+      currentJobController = null;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error(`Error resuming sync job ${jobId}:`, error);
     return { success: false, error: error.message };
   }
 };
