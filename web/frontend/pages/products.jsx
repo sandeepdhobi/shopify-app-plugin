@@ -17,7 +17,7 @@ import { useState } from "react";
 import { useQuery } from "react-query";
 import { useAppBridge } from "@shopify/app-bridge-react";
 
-import { ProductsCard, ProductSyncCard } from "../components";
+import { ProductsCard, ProductSyncCard, MarketInfo } from "../components";
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -84,6 +84,11 @@ export default function Dashboard() {
 
   const renderOverview = () => (
     <Layout>
+      {/* Market Info Section - Compact View */}
+      <Layout.Section>
+        <MarketInfo compact={true} />
+      </Layout.Section>
+      
       <Layout.Section oneHalf>
         <ProductsCard />
       </Layout.Section>
@@ -148,11 +153,20 @@ export default function Dashboard() {
           )}
         </Card>
       </Layout.Section>
+
+      {/* Full Raw Shopify Data View */}
+      <Layout.Section>
+        <MarketInfo />
+      </Layout.Section>
     </Layout>
   );
 
   const renderProducts = () => (
+    <Layout>
+      <Layout.Section>
         <ProductSyncCard />
+      </Layout.Section>
+    </Layout>
   );
 
   const renderTabContent = () => {

@@ -565,6 +565,117 @@ app.post("/api/subscription/create", async (req, res) => {
   }
 });
 
+// Get shop market information (country and currency)
+app.get("/api/shop/market-info", async (_req, res) => {
+  const client = new shopify.api.clients.Graphql({
+    session: res.locals.shopify.session,
+  });
+
+  try {
+    const shopData = await client.request(`
+      query getShopMarketInfo {
+        shop {
+          id
+          name
+          email
+          url
+          myshopifyDomain
+          currencyCode
+          timezoneAbbreviation
+          ianaTimezone
+          plan {
+            displayName
+            partnerDevelopment
+            shopifyPlus
+          }
+          billingAddress {
+            country
+            countryCodeV2 
+            province
+            city
+            address1
+            address2
+            zip
+          }
+          shipsToCountries
+        }
+      }
+    `);
+
+    // Try to get additional market data if permissions allow
+    let marketsData = null;
+    try {
+      const additionalData = await client.request(`
+        query getMarketsData {
+          markets(first: 5) {
+            edges {
+              node {
+                id
+                name
+                enabled
+                primary
+                handle
+                regions(first: 10) {
+                  edges {
+                    node {
+                      id
+                      name
+                      countryCode
+                    }
+                  }
+                }
+                currencySettings {
+                  baseCurrency {
+                    currencyCode
+                    currencyName
+                  }
+                  localCurrencies
+                }
+              }
+            }
+          }
+        }
+      `);
+      marketsData = additionalData.data.markets;
+    } catch (marketError) {
+      console.log('Markets data not accessible:', marketError.message);
+    }
+
+    // Return raw data from Shopify API
+    res.status(200).send({
+      raw_shopify_response: {
+        shop: shopData.data.shop,
+        markets: marketsData
+      },
+      session_info: {
+        shop: res.locals.shopify.session.shop,
+        scope: res.locals.shopify.session.scope
+      },
+      api_version: "2024-10",
+      query_info: {
+        description: "Basic shop info with shipping countries and optional markets data",
+        shop_data_available: true,
+        markets_data_available: marketsData ? true : false,
+        includes: [
+          "shop_basic_info",
+          "billing_address", 
+          "ships_to_countries",
+          "shopify_plan",
+          "markets_if_accessible"
+        ]
+      }
+    });
+  } catch (e) {
+    console.log(`Failed to fetch shop market info: ${e.message}`);
+    console.error('Full error:', e);
+    res.status(500).send({ 
+      error: e.message,
+      raw_error: e.toString(),
+      details: 'Check server logs for more information. This might be a GraphQL permissions issue.'
+    });
+  }
+});
+
 app.use(shopify.cspHeaders());
 app.use(serveStatic(STATIC_PATH, { index: false }));
 
