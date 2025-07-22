@@ -12,6 +12,8 @@ import {
   Banner,
   Toast,
   Frame,
+  FormLayout,
+  Select,
 } from "@shopify/polaris";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "react-query";
@@ -22,7 +24,42 @@ export default function ProductSyncCard() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastError, setToastError] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState("");
   const queryClient = useQueryClient();
+
+  // Country options for shipping
+  const countryOptions = [
+    { label: "Select shipping country...", value: "" },
+    { label: "United States", value: "US" },
+    { label: "Canada", value: "CA" },
+    { label: "United Kingdom", value: "GB" },
+    { label: "Australia", value: "AU" },
+    { label: "Germany", value: "DE" },
+    { label: "France", value: "FR" },
+    { label: "Italy", value: "IT" },
+    { label: "Spain", value: "ES" },
+    { label: "Netherlands", value: "NL" },
+    { label: "Belgium", value: "BE" },
+    { label: "Austria", value: "AT" },
+    { label: "Switzerland", value: "CH" },
+    { label: "Sweden", value: "SE" },
+    { label: "Norway", value: "NO" },
+    { label: "Denmark", value: "DK" },
+    { label: "Finland", value: "FI" },
+    { label: "Ireland", value: "IE" },
+    { label: "Portugal", value: "PT" },
+    { label: "Poland", value: "PL" },
+    { label: "Japan", value: "JP" },
+    { label: "South Korea", value: "KR" },
+    { label: "Singapore", value: "SG" },
+    { label: "Hong Kong", value: "HK" },
+    { label: "New Zealand", value: "NZ" },
+    { label: "Brazil", value: "BR" },
+    { label: "Mexico", value: "MX" },
+    { label: "India", value: "IN" },
+    { label: "China", value: "CN" },
+    { label: "United Arab Emirates", value: "AE" },
+  ];
 
   // Fetch sync history
   const { data: syncHistory, isLoading: isLoadingHistory } = useQuery({
@@ -50,13 +87,13 @@ export default function ProductSyncCard() {
 
   // Start sync mutation
   const startSyncMutation = useMutation({
-    mutationFn: async ({ batchSize = 50 }) => {
+    mutationFn: async ({ batchSize = 50, shippingCountry }) => {
       const response = await fetch("/api/products/sync", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ batchSize }),
+        body: JSON.stringify({ batchSize, shippingCountry }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -67,6 +104,7 @@ export default function ProductSyncCard() {
     onSuccess: (data) => {
       setActiveSyncJob(data.jobId);
       setShowSyncModal(false);
+      setSelectedCountry(""); // Reset form
       setToastMessage("Product sync started successfully!");
       setToastError(false);
       setShowToast(true);
@@ -183,7 +221,16 @@ export default function ProductSyncCard() {
   }, [jobStatus, queryClient]);
 
   const handleStartSync = () => {
-    startSyncMutation.mutate({ batchSize: 50 });
+    if (!selectedCountry) {
+      setToastMessage("Please select a shipping country before starting sync");
+      setToastError(true);
+      setShowToast(true);
+      return;
+    }
+    startSyncMutation.mutate({ 
+      batchSize: 50, 
+      shippingCountry: selectedCountry 
+    });
   };
 
   const handleForceCancelAll = () => {
@@ -239,165 +286,183 @@ export default function ProductSyncCard() {
   return (
     <Frame>
       {toastMarkup}
-          {isActiveSync && (
-            <Card sectioned>
-              <Stack vertical spacing="tight">
-                                  <Stack distribution="equalSpacing" alignment="center">
-                  <Stack alignment="center" spacing="tight">
-                    {currentJob?.status !== "paused" && <Spinner size="small" />}
-                    <Text variant="headingMd">
-                      {currentJob?.status === "paused" ? "Sync Paused" : "Sync in Progress"}
-                    </Text>
-                  </Stack>
-                  <Badge {...getStatusBadge(currentJob?.status)} />
-                </Stack>
-                
-                <Stack vertical spacing="tight">
-                  {currentJob?.total_products > 0 && (
-                    <ProgressBar progress={getProgressPercentage()} />
-                  )}
-                  <Text variant="bodyMd" color="subdued">
-                    {currentJob?.processed_products || 0} products synced
-                    {currentJob?.total_products > 0 && (
-                      <span> of {currentJob.total_products}</span>
-                    )}
-                    {currentJob?.failed_products > 0 && (
-                      <span style={{ color: "#d72c0d" }}>
-                        {" "}({currentJob.failed_products} failed)
-                      </span>
-                    )}
-                  </Text>
-                </Stack>
-                
-                <Stack spacing="tight">
-                  {/* Show different buttons based on job status */}
-                  {currentJob?.status === "processing" && (
-                    <Button
-                      onClick={handlePauseSync}
-                      loading={pauseSyncMutation.isLoading}
-                    >
-                      Pause Sync
-                    </Button>
-                  )}
-                  
-                  {currentJob?.status === "paused" && (
-                    <Button
-                      primary
-                      onClick={handleResumeSync}
-                      loading={resumeSyncMutation.isLoading}
-                    >
-                      Resume Sync
-                    </Button>
-                  )}
-                  
-                  <Button
-                    destructive
-                    onClick={handleForceCancelAll}
-                    loading={forceCancelAllMutation.isLoading}
-                  >
-                    Force Cancel All
-                  </Button>
-                </Stack>
-              </Stack>
-            </Card>
-          )}
-
-          {/* Sync Controls */}
-          <Card sectioned>
-            <Stack vertical spacing="loose">
-              <Stack distribution="equalSpacing" alignment="center">
-                              <Stack vertical spacing="tight">
-                <Text variant="headingMd">Sync Products from AmazingE</Text>
-                <Text variant="bodyMd" color="subdued">
-                  Import products from your third-party supplier with optimized single-job processing
+      {isActiveSync && (
+        <Card sectioned>
+          <Stack vertical spacing="tight">
+            <Stack distribution="equalSpacing" alignment="center">
+              <Stack alignment="center" spacing="tight">
+                {currentJob?.status !== "paused" && <Spinner size="small" />}
+                <Text variant="headingMd">
+                  {currentJob?.status === "paused" ? "Sync Paused" : "Sync in Progress"}
                 </Text>
               </Stack>
+              <Badge {...getStatusBadge(currentJob?.status)} />
+            </Stack>
+            
+            <Stack vertical spacing="tight">
+              {currentJob?.total_products > 0 && (
+                <ProgressBar progress={getProgressPercentage()} />
+              )}
+              <Text variant="bodyMd" color="subdued">
+                {currentJob?.processed_products || 0} products synced
+                {currentJob?.total_products > 0 && (
+                  <span> of {currentJob.total_products}</span>
+                )}
+                {currentJob?.failed_products > 0 && (
+                  <span style={{ color: "#d72c0d" }}>
+                    {" "}({currentJob.failed_products} failed)
+                  </span>
+                )}
+              </Text>
+            </Stack>
+            
+            <Stack spacing="tight">
+              {/* Show different buttons based on job status */}
+              {currentJob?.status === "processing" && (
+                <Button
+                  onClick={handlePauseSync}
+                  loading={pauseSyncMutation.isLoading}
+                >
+                  Pause Sync
+                </Button>
+              )}
+              
+              {currentJob?.status === "paused" && (
                 <Button
                   primary
-                  onClick={() => setShowSyncModal(true)}
-                  disabled={isActiveSync}
-                  loading={startSyncMutation.isLoading}
+                  onClick={handleResumeSync}
+                  loading={resumeSyncMutation.isLoading}
                 >
-                  Start Sync
+                  Resume Sync
                 </Button>
-              </Stack>
-
-              {syncHistory?.jobs?.length > 0 && (
-                <Banner status="info">
-                  <p>
-                    Last sync: {formatDate(syncHistory.jobs[0].created_at)} - {" "}
-                    {syncHistory.jobs[0].processed_products} products processed
-                  </p>
-                </Banner>
               )}
+              
+              <Button
+                destructive
+                onClick={handleForceCancelAll}
+                loading={forceCancelAllMutation.isLoading}
+              >
+                Force Cancel All
+              </Button>
             </Stack>
-          </Card>
+          </Stack>
+        </Card>
+      )}
 
-          {/* Sync History */}
-          <Card title="Sync History" sectioned>
-            {isLoadingHistory ? (
-              <Stack alignment="center">
-                <Spinner size="large" />
-                <Text>Loading sync history...</Text>
-              </Stack>
-            ) : syncHistory?.jobs?.length > 0 ? (
-              <DataTable
-                columnContentTypes={["text", "text", "text", "text", "text"]}
-                headings={["Date", "Status", "Products", "Failed", "Duration"]}
-                rows={syncHistory.jobs.slice(0, 10).map((job) => [
-                  formatDate(job.created_at),
-                  <Badge key={job.id} {...getStatusBadge(job.status)} />,
-                  job.processed_products || 0,
-                  job.failed_products || 0,
-                  job.status === "completed" || job.status === "failed"
-                    ? `${Math.round(
-                        (new Date(job.updated_at) - new Date(job.created_at)) / 1000
-                      )}s`
-                    : "-",
-                ])}
-              />
-            ) : (
-              <Stack alignment="center">
-                <Text color="subdued">No sync history available</Text>
-              </Stack>
-            )}
+      {/* Sync Controls */}
+      <Card sectioned>
+        <Stack vertical spacing="loose">
+          <Stack distribution="equalSpacing" alignment="center">
+            <Stack vertical spacing="tight">
+              <Text variant="headingMd">Sync Products from AmazingE</Text>
+              <Text variant="bodyMd" color="subdued">
+                Import products from your third-party supplier with optimized single-job processing
+              </Text>
+            </Stack>
+            <Button
+              primary
+              onClick={() => setShowSyncModal(true)}
+              disabled={isActiveSync}
+              loading={startSyncMutation.isLoading}
+            >
+              Start Sync
+            </Button>
+          </Stack>
 
+          {syncHistory?.jobs?.length > 0 && (
+            <Banner status="info">
+              <p>
+                Last sync: {formatDate(syncHistory.jobs[0].created_at)} - {" "}
+                {syncHistory.jobs[0].processed_products} products processed
+              </p>
+            </Banner>
+          )}
+        </Stack>
       </Card>
 
-      {/* Sync Configuration Modal */}
+      {/* Sync History */}
+      <Card title="Sync History" sectioned>
+        {isLoadingHistory ? (
+          <Stack alignment="center">
+            <Spinner size="large" />
+            <Text>Loading sync history...</Text>
+          </Stack>
+        ) : syncHistory?.jobs?.length > 0 ? (
+          <DataTable
+            columnContentTypes={["text", "text", "text", "text", "text"]}
+            headings={["Date", "Status", "Products", "Failed", "Duration"]}
+            rows={syncHistory.jobs.slice(0, 10).map((job) => [
+              formatDate(job.created_at),
+              <Badge key={job.id} {...getStatusBadge(job.status)} />,
+              job.processed_products || 0,
+              job.failed_products || 0,
+              job.status === "completed" || job.status === "failed"
+                ? `${Math.round(
+                    (new Date(job.updated_at) - new Date(job.created_at)) / 1000
+                  )}s`
+                : "-",
+            ])}
+          />
+        ) : (
+          <Stack alignment="center">
+            <Text color="subdued">No sync history available</Text>
+          </Stack>
+        )}
+      </Card>
+
+      {/* Sync Configuration Modal with Country Selection */}
       <Modal
         open={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        title="Start Product Sync"
+        onClose={() => {
+          setShowSyncModal(false);
+          setSelectedCountry(""); // Reset on close
+        }}
+        title="Configure Product Sync"
         primaryAction={{
           content: "Start Sync",
           onAction: handleStartSync,
           loading: startSyncMutation.isLoading,
+          disabled: !selectedCountry,
         }}
         secondaryActions={[
           {
             content: "Cancel",
-            onAction: () => setShowSyncModal(false),
+            onAction: () => {
+              setShowSyncModal(false);
+              setSelectedCountry(""); // Reset on cancel
+            },
           },
         ]}
       >
         <Modal.Section>
-          <TextContainer>
-            <Text variant="bodyMd">
-              This will start syncing products from your third-party supplier to your Shopify store.
-            </Text>
-            <Text variant="bodyMd">
-              The sync will run in the background and process products in optimized batches for better performance.
-            </Text>
-            <Text variant="bodyMd">
-              <strong>Features:</strong> Only one sync job can run at a time, improved error handling, 
-              and better cancellation support.
-            </Text>
-            <Text variant="bodyMd">
-              <strong>Note:</strong> This demo will create 1000 sample products. In a real implementation, 
-              this would connect to your actual third-party API.
-            </Text>
-          </TextContainer>
+          <Stack vertical spacing="loose">
+            <FormLayout>
+              <Select
+                label="Product Shipping Country"
+                options={countryOptions}
+                value={selectedCountry}
+                onChange={(value) => setSelectedCountry(value)}
+                placeholder="Select the primary shipping country for products"
+                helpText="This will be used to configure shipping settings for imported products"
+              />
+            </FormLayout>
+
+            <TextContainer>
+              <Text variant="bodyMd">
+                This will start syncing products from your third-party supplier to your Shopify store.
+              </Text>
+              <Text variant="bodyMd">
+                The sync will run in the background and process products in optimized batches for better performance.
+              </Text>
+              <Text variant="bodyMd">
+                <strong>Selected Country:</strong> Products will be configured to ship from {selectedCountry ? countryOptions.find(c => c.value === selectedCountry)?.label : 'No country selected'}.
+              </Text>
+              <Text variant="bodyMd">
+                <strong>Features:</strong> Only one sync job can run at a time, improved error handling, 
+                and better cancellation support.
+              </Text>
+            </TextContainer>
+          </Stack>
         </Modal.Section>
       </Modal>
     </Frame>

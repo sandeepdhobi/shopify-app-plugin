@@ -221,14 +221,24 @@ app.get("/api/orders/list", async (_req, res) => {
 app.post("/api/products/sync", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
-    const { batchSize = 10 } = req.body;
+    const { batchSize = 10, shippingCountry } = req.body;
     
-    const result = await startSyncJob(session, { batchSize });
+    // Validate shipping country
+    if (!shippingCountry) {
+      res.status(400).send({ error: "Shipping country is required" });
+      return;
+    }
+    
+    const result = await startSyncJob(session, { 
+      batchSize, 
+      shippingCountry 
+    });
     
     res.status(200).send({ 
       success: true, 
-      message: "Sync job started successfully",
-      jobId: result.jobId 
+      message: `Sync job started successfully for shipping country: ${shippingCountry}`,
+      jobId: result.jobId,
+      shippingCountry: shippingCountry
     });
   } catch (error) {
     console.error("Failed to start sync job:", error.message);
