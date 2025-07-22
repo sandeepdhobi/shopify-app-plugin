@@ -22,7 +22,7 @@ import { ProductsCard, ProductSyncCard } from "../components";
 export default function Dashboard() {
   const { t } = useTranslation();
   const shopify = useAppBridge();
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(1);
 
   // Products data
   const {

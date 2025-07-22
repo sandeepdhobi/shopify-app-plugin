@@ -3,7 +3,7 @@
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
 name = "DropShipper"
 handle = "fruitful-benchmark-app-13"
-application_url = "https://excess-genres-sustained-excellence.trycloudflare.com"
+application_url = "https://crawford-night-hunting-paintball.trycloudflare.com"
 embedded = true
 
 [build]
@@ -19,9 +19,9 @@ scopes = "write_products,read_publications,read_inventory,write_publications"
 
 [auth]
 redirect_urls = [
-  "https://excess-genres-sustained-excellence.trycloudflare.com/auth/callback",
-  "https://excess-genres-sustained-excellence.trycloudflare.com/auth/shopify/callback",
-  "https://excess-genres-sustained-excellence.trycloudflare.com/api/auth/callback"
+  "https://crawford-night-hunting-paintball.trycloudflare.com/auth/callback",
+  "https://crawford-night-hunting-paintball.trycloudflare.com/auth/shopify/callback",
+  "https://crawford-night-hunting-paintball.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

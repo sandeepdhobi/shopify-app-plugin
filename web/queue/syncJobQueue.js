@@ -444,9 +444,6 @@ const processJob = async (jobId, session, batchSize = 50, resumeFromOffset = nul
       // Fetch data for current offset
       const batch = await fetchProductsFromThirdParty(offset_value, batchSize);
       
-      // Update current offset in database for pause/resume functionality
-      await updateJobStatus(jobId, { current_offset: offset_value });
-      
       if (!batch.products || batch.products.length === 0) {
         console.log(`[DEBUG] Job ${jobId}: No more products to process`);
         break;
@@ -531,6 +528,9 @@ const processJob = async (jobId, session, batchSize = 50, resumeFromOffset = nul
       }
       
       offset_value = batch.offset_value;
+      
+      // Update current offset in database with next_offset_value for pause/resume functionality
+      await updateJobStatus(jobId, { current_offset: offset_value });
     }
     
     // Final status update
