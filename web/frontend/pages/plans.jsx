@@ -10,10 +10,6 @@ import {
   Badge,
   List,
   Spinner,
-  Modal,
-  FormLayout,
-  TextField,
-  Checkbox,
   Icon,
   Box,
   Banner,
@@ -28,16 +24,6 @@ export default function PlansPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [paymentData, setPaymentData] = useState({
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-    nameOnCard: "",
-    billingAddress: "",
-    acceptTerms: false,
-  });
 
   useEffect(() => {
     fetchPlans();
@@ -57,20 +43,8 @@ export default function PlansPage() {
   };
 
   const handleSubscribe = async (planId) => {
-    const plan = plans.find((p) => p.id === planId);
-    
-    // Don't open payment modal for free plan
+    // Don't process free plan
     if (planId === 'free') {
-      return;
-    }
-    
-    setSelectedPlan(plan);
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentSubmit = async () => {
-    if (!paymentData.acceptTerms) {
-      alert("Please accept the terms and conditions");
       return;
     }
 
@@ -81,7 +55,7 @@ export default function PlansPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ planId: selectedPlan.id }),
+        body: JSON.stringify({ planId }),
       });
 
       const result = await response.json();
@@ -98,10 +72,6 @@ export default function PlansPage() {
     } finally {
       setSubscriptionLoading(false);
     }
-  };
-
-  const handlePaymentDataChange = (field, value) => {
-    setPaymentData({ ...paymentData, [field]: value });
   };
 
   if (loading) {
@@ -215,8 +185,9 @@ export default function PlansPage() {
               fullWidth
               onClick={() => handleSubscribe(plan.id)}
               disabled={plan.id === 'free' || plan.buttonText === 'Current plan'}
+              loading={subscriptionLoading}
             >
-              {plan.buttonText}
+              {subscriptionLoading ? "Processing..." : plan.buttonText}
             </Button>
           </div>
 
@@ -266,78 +237,7 @@ export default function PlansPage() {
         </Layout.Section>
       </Layout>
 
-      {/* Payment Modal */}
-      <Modal
-        open={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        title="Complete Your Subscription"
-        primaryAction={{
-          content: subscriptionLoading ? "Processing..." : "Subscribe Now",
-          onAction: handlePaymentSubmit,
-          loading: subscriptionLoading,
-          disabled: subscriptionLoading,
-        }}
-        secondaryActions={[
-          {
-            content: "Cancel",
-            onAction: () => setShowPaymentModal(false),
-          },
-        ]}
-      >
-        <Modal.Section>
-          <Stack vertical spacing="loose">
 
-            <FormLayout>
-              <Text variant="headingMd" as="h3">
-                Payment Information
-              </Text>
-
-              <TextField
-                label="Card Number"
-                value={paymentData.cardNumber}
-                onChange={(value) => handlePaymentDataChange("cardNumber", value)}
-                placeholder="1234 5678 9012 3456"
-              />
-
-              <Stack distribution="fillEvenly">
-                <TextField
-                  label="Expiry Date"
-                  value={paymentData.expiryDate}
-                  onChange={(value) => handlePaymentDataChange("expiryDate", value)}
-                  placeholder="MM/YY"
-                />
-                <TextField
-                  label="CVV"
-                  value={paymentData.cvv}
-                  onChange={(value) => handlePaymentDataChange("cvv", value)}
-                  placeholder="123"
-                />
-              </Stack>
-
-              <TextField
-                label="Name on Card"
-                value={paymentData.nameOnCard}
-                onChange={(value) => handlePaymentDataChange("nameOnCard", value)}
-                placeholder="John Doe"
-              />
-
-              <TextField
-                label="Billing Address"
-                value={paymentData.billingAddress}
-                onChange={(value) => handlePaymentDataChange("billingAddress", value)}
-                placeholder="123 Main St, City, State 12345"
-                multiline={3}
-              />
-
-              <Checkbox
-                label="I accept the terms and conditions"
-                checked={paymentData.acceptTerms}
-                onChange={(value) => handlePaymentDataChange("acceptTerms", value)}
-              />
-            </FormLayout>
-          </Stack>
-        </Modal.Section>
-      </Modal>
     </Page>
   );
 } 

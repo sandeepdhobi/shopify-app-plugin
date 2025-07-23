@@ -515,12 +515,16 @@ app.post("/api/subscription/create", async (req, res) => {
       return;
     }
 
+    // Alternative approach - construct URL from request
+    const baseUrl = `https://${req.get('host')}`;
+    const returnUrl = `${baseUrl}/plans?subscription=success`;
+
     // Handle free plan
     if (selectedPlan.id === "free") {
       res.status(200).send({ 
         success: true, 
         message: "Free plan is already active",
-        confirmationUrl: `${process.env.SHOPIFY_APP_URL}/plans?subscription=free`
+        confirmationUrl: returnUrl
       });
       return;
     }
@@ -544,7 +548,7 @@ app.post("/api/subscription/create", async (req, res) => {
     `, {
       variables: {
         name: `${selectedPlan.name} Plan`,
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/plans?subscription=success`,
+        returnUrl: returnUrl,
         lineItems: [{
           plan: {
             appRecurringPricingDetails: {
