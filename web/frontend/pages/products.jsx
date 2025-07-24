@@ -10,18 +10,21 @@ import {
   Stack,
   Button,
   EmptyState,
+  Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { useQuery } from "react-query";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useNavigate } from "react-router-dom";
 
 import { ProductsCard, ProductSyncCard, MarketInfo } from "../components";
 
 export default function Dashboard() {
   const { t } = useTranslation();
   const shopify = useAppBridge();
+  const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState(1);
 
   // Products data
@@ -67,6 +70,10 @@ export default function Dashboard() {
     setSelectedTab(selectedTabIndex);
   };
 
+  const handleNavigateToPlans = () => {
+    navigate("/plans");
+  };
+
   const formatCurrency = (amount, currency = "USD") => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -84,6 +91,20 @@ export default function Dashboard() {
 
   const renderOverview = () => (
     <Layout>
+      {/* Subscription Wall Banner */}
+      <Layout.Section>
+        <Banner
+          title="Upgrade to unlock premium features"
+          tone="info"
+          action={{
+            content: "View Plans",
+            onAction: handleNavigateToPlans,
+          }}
+        >
+          <p>Get access to advanced analytics, unlimited products, and priority support.</p>
+        </Banner>
+      </Layout.Section>
+
       {/* Market Info Section - Compact View */}
       <Layout.Section>
         <MarketInfo compact={true} />
@@ -163,6 +184,20 @@ export default function Dashboard() {
 
   const renderProducts = () => (
     <Layout>
+      {/* Subscription Wall Banner */}
+      <Layout.Section>
+        <Banner
+          title="Upgrade to unlock premium features"
+          tone="info"
+          action={{
+            content: "View Plans",
+            onAction: handleNavigateToPlans,
+          }}
+        >
+          <p>Get access to advanced analytics, unlimited products, and priority support.</p>
+        </Banner>
+      </Layout.Section>
+
       <Layout.Section>
         <ProductSyncCard />
       </Layout.Section>
