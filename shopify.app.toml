@@ -3,7 +3,7 @@
 client_id = "9bfcb6e881cf4bc9a1a88a6cbf410f56"
 name = "DropShipper"
 handle = "fruitful-benchmark-app-13"
-application_url = "https://memo-apr-new-cent.trycloudflare.com"
+application_url = "https://puzzles-meyer-template-rejected.trycloudflare.com"
 embedded = true
 
 [build]
@@ -19,9 +19,9 @@ scopes = "write_products,read_publications,read_inventory,write_publications"
 
 [auth]
 redirect_urls = [
-  "https://memo-apr-new-cent.trycloudflare.com/auth/callback",
-  "https://memo-apr-new-cent.trycloudflare.com/auth/shopify/callback",
-  "https://memo-apr-new-cent.trycloudflare.com/api/auth/callback"
+  "https://puzzles-meyer-template-rejected.trycloudflare.com/auth/callback",
+  "https://puzzles-meyer-template-rejected.trycloudflare.com/auth/shopify/callback",
+  "https://puzzles-meyer-template-rejected.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
